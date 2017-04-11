@@ -22,7 +22,7 @@ class RemindMe:
 
         author = ctx.message.author
 
-        pattern = '!remindme (((?P<hours>\d+):)?(?P<minutes>\d{1,2}):)?(?P<seconds>\d{1,2})( (?P<reason>.*))?'
+        pattern = 'remindme (((?P<hours>\d+):)?(?P<minutes>\d{1,2}):)?(?P<seconds>\d{1,2})( (?P<reason>.*))?'
 
         m = re.search(pattern, ctx.message.content)
         reason = m.group('reason')
