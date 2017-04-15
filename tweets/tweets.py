@@ -1,7 +1,7 @@
 from random import choice as randchoice
 from discord.ext import commands
 from queue import Queue
-import threading, discord, asyncio, random
+import threading, discord, asyncio, random, re
 from .utils.dataIO import dataIO
 from .utils import checks
 try:
@@ -14,6 +14,8 @@ except:
 import os
 
 #todo: pay attention when servers/channels become unavailable -> remove them from settings.json
+#todo: alternatively: ignore those servers/channels (don't follow those twitter users)
+#todo: handle http timeout error. Stream will stop working once temporary connection failure occurs.
 
 
 class TweetListener(StreamListener):
@@ -118,7 +120,6 @@ class Tweets():
             self.auth = auth
         return self.api
 
-
     @commands.group(pass_context=True, no_pm=True, name='tweets')
     async def _tweets(self, ctx):
         """Gets information from Twitter's API"""
@@ -156,89 +157,61 @@ class Tweets():
             message = "Uh oh, an error occurred somewhere!"
             await self.bot.say(message)
 
-    @_tweets.command(pass_context=True, no_pm=True, name='start')
+    @_tweets.command(pass_context=True, name="add")
     @checks.is_owner()
-    async def start(self):
-        """Owner only: Starts the twitter stream"""
-        if self.twitterStreamActive:
-            await self.bot.say("twitter stream already active")
-        else:
-            await self.bot.say("starting tweets")
-            await self.user_loop()
-            self.twitterStreamActive = True
-
-
-    @_tweets.command(pass_context=True, no_pm=True, name='stop')
-    @checks.is_owner()
-    async def stop(self):
-        """Owner only: Stops the twitter stream"""
-        if self.twitterStreamActive:
-            await self.bot.say("stopping tweets")
-            self.l.interrupt = True
-            self.twitterStreamActive = False
-        else:
-            await self.bot.say("can't stop, twitter stream not active")
-
-
-
-    @commands.group(pass_context=True, name='tweetset')
-    @checks.admin_or_permissions(manage_server=True)
-    async def _tweetset(self, ctx):
-        """Command for setting required access information for the API.
-        To get this info, visit https://apps.twitter.com and create a new application.
-        Once the application is created, click Keys and Access Tokens then find the
-        button that says Create my access token and click that. Once that is done,
-        use the subcommands of this command to set the access details"""
-        if ctx.invoked_subcommand is None:
-            await self.bot.send_cmd_help(ctx)
-
-    @_tweetset.group(pass_context=True, name="stream")
-    @checks.admin_or_permissions(manage_server=True)
-    async def _stream(self, ctx):
-        """Command for following certain twitter users. Use this in the text channel
-        in which you want the twitter user followed. Write user or list after."""
-        if ctx.invoked_subcommand is None:
-            await self.bot.send_cmd_help(ctx)
-
-    @_stream.group(pass_context=True, name="user")
-    @checks.admin_or_permissions(manage_server=True)
-    async def _user(self, ctx):
-        """User: This is used for adding individual twitter users."""
-        #todo: do an equivalent for twitter list, e.g.: https://twitter.com/rokxx/lists/dota-2
-        if ctx.invoked_subcommand is None:
-            await self.bot.send_cmd_help(ctx)
-
-    @_user.command(pass_context=True, name="add")
-    @checks.admin_or_permissions(manage_server=True)
-    async def _add(self, ctx, user_to_track):
-        """Adds the twitter user to the list of followed twitter users."""
-        if user_to_track is None:
+    async def _add(self, ctx, user_or_list_to_track: str):
+        """Adds the twitter user to the list of followed twitter users.
+        Provide a Twitter list (e.g. http://twitter.com/rokxx/lists/dota-2/members) to track multiple twitter users at once."""
+        if user_or_list_to_track is None:
             await self.bot.say("I can't do that, silly!")
         else:
+            isList = False
+
             api = self.authenticate()
-            tweet = None
-            for twt in tw.Cursor(api.user_timeline, id=user_to_track).items(1):
-                tweet = twt
 
-            if ctx.message.server.id not in self.settings["servers"].keys():
-                self.settings["servers"][ctx.message.server.id] = {'channels': {}}
-            if ctx.message.channel.id not in self.settings['servers'][ctx.message.server.id]['channels'].keys():
-                self.settings["servers"][ctx.message.server.id]['channels'][ctx.message.channel.id] = {'users': {}}
-            if tweet.user.id_str not in self.settings["servers"][ctx.message.server.id]['channels'][ctx.message.channel.id]['users']:
-                self.settings["servers"][ctx.message.server.id]['channels'][ctx.message.channel.id]['users'][tweet.user.id_str] = \
-                    {
-                        "user_id": tweet.user.id_str,
-                        "user_name": tweet.user.name
-                    }
-
-                dataIO.save_json(self.settings_file, self.settings)
-                await self.bot.say("Added %s to the twitter list!" %tweet.user.name)
+            twitter_accounts = []
+            pattern = 'twitter.[A-Za-z]+\/(?P<twittername>[A-Za-z]+)\/lists\/(?P<listname>[A-Za-z-0-9_]+)'
+            m = re.search(pattern, user_or_list_to_track, re.I)
+            if m != None:
+                isList = True
+                await self.bot.say("Received list. This may take a while.")
+                for member in tw.Cursor(api.list_members, m.group('twittername'), m.group('listname')).items():
+                    twitterID = member._json['id_str']
+                    twitterName = member._json['name']
+                    if twitterID not in twitter_accounts:
+                        twitter_accounts.append({
+                            "user_id": twitterID,
+                            "user_name": twitterName
+                        })
             else:
-                await self.bot.say("Twitter user %s is already added" %tweet.user.name)
+                for twt in tw.Cursor(api.user_timeline, id=user_or_list_to_track).items(1):
+                    twitter_accounts.append({
+                        "user_id": twt.user.id_str,
+                        "user_name": twt.user.name
+                    })
 
-    @_user.command(pass_context=True, name="remove")
-    @checks.admin_or_permissions(manage_server=True)
-    async def _remove(self, ctx, user_to_remove):
+            for twitter_account in twitter_accounts:
+                if ctx.message.server.id not in self.settings["servers"].keys():
+                    self.settings["servers"][ctx.message.server.id] = {'channels': {}}
+                if ctx.message.channel.id not in self.settings['servers'][ctx.message.server.id]['channels'].keys():
+                    self.settings["servers"][ctx.message.server.id]['channels'][ctx.message.channel.id] = {'users': {}}
+                if twitter_account['user_id'] not in \
+                        self.settings["servers"][ctx.message.server.id]['channels'][ctx.message.channel.id]['users']:
+                    self.settings["servers"][ctx.message.server.id]['channels'][ctx.message.channel.id]['users'][
+                        twitter_account['user_id']] = twitter_account
+
+                    dataIO.save_json(self.settings_file, self.settings)
+                    if not isList:
+                        await self.bot.say("Added %s to the twitter list!" % twitter_account['user_name'])
+                else:
+                    if not isList:
+                        await self.bot.say("Twitter user %s is already added" % twitter_account['user_name'])
+            if isList:
+                await self.bot.say("Finished adding twitter users to list. Count: %s" %len(twitter_accounts))
+
+    @_tweets.command(pass_context=True, name="remove")
+    @checks.is_owner()
+    async def _remove(self, ctx, user_to_remove: str):
         """Removes the twitter user from the list of followed twitter users.
         Write all after to remove the entire list."""
         if user_to_remove is None:
@@ -262,13 +235,47 @@ class Tweets():
                 await self.bot.say('This server does not follow any twitter users.')
             elif ctx.message.channel.id not in self.settings['servers'][ctx.message.server.id]['channels']:
                 await self.bot.say('This text channel does not follow any twitter users.')
-            elif tweet.user.id_str not in self.settings['servers'][ctx.message.server.id]['channels'][ctx.message.channel.id]['users']:
+            elif tweet.user.id_str not in \
+                    self.settings['servers'][ctx.message.server.id]['channels'][ctx.message.channel.id]['users']:
                 await self.bot.say('Could not find twitter user')
             else:
-                removed = self.settings["servers"][ctx.message.server.id]['channels'][ctx.message.channel.id]["users"].pop(tweet.user.id_str)
+                removed = self.settings["servers"][ctx.message.server.id]['channels'][ctx.message.channel.id][
+                    "users"].pop(tweet.user.id_str)
                 dataIO.save_json(self.settings_file, self.settings)
                 await self.bot.say("Removed %s from list" % removed['user_name'])
 
+    @_tweets.command(pass_context=True, no_pm=True, name='start')
+    @checks.is_owner()
+    async def start(self):
+        """Owner only: Starts the twitter stream"""
+        if self.twitterStreamActive:
+            await self.bot.say("twitter stream already active")
+        else:
+            await self.bot.say("starting tweets")
+            await self.user_loop()
+            self.twitterStreamActive = True
+
+    @_tweets.command(pass_context=True, no_pm=True, name='stop')
+    @checks.is_owner()
+    async def stop(self):
+        """Owner only: Stops the twitter stream"""
+        if self.twitterStreamActive:
+            await self.bot.say("stopping tweets")
+            self.l.interrupt = True
+            self.twitterStreamActive = False
+        else:
+            await self.bot.say("can't stop, twitter stream not active")
+
+    @commands.group(pass_context=True, name='tweetset')
+    @checks.admin_or_permissions(manage_server=True)
+    async def _tweetset(self, ctx):
+        """Command for setting required access information for the API.
+        To get this info, visit https://apps.twitter.com and create a new application.
+        Once the application is created, click Keys and Access Tokens then find the
+        button that says Create my access token and click that. Once that is done,
+        use the subcommands of this command to set the access details"""
+        if ctx.invoked_subcommand is None:
+            await self.bot.send_cmd_help(ctx)
 
     @_tweetset.command(name='creds')
     @checks.is_owner()
@@ -353,9 +360,6 @@ class Tweets():
 
                             await self.bot.send_message(channel, embed=em)
 
-
-
-
 def check_folder():
     if not os.path.exists("data/tweets"):
         print("Creating data/tweets folder")
@@ -369,7 +373,6 @@ def check_file():
     if not dataIO.is_valid_json(f):
         print("Creating default settings.json...")
         dataIO.save_json(f, data)
-
 
 def setup(bot):
     check_folder()
