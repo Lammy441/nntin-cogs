@@ -39,7 +39,7 @@ class TweetListener(StreamListener):
         #if there is a full status text take that instead
         message['status'] = status.text
         if hasattr(status, "extended_tweet"):
-            message['status'] = status.extended_entities['full_text']
+            message['status'] = status.extended_tweet['full_text']
 
         #replace the twitter URL shortened URLs with their unshortened URL
         for url in status.entities['urls']:
