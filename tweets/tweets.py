@@ -13,8 +13,6 @@ except:
     twInstalled = False
 import os
 
-#todo: pay attention when servers/channels become unavailable -> remove them from settings.json
-#todo: alternatively: ignore those servers/channels (don't follow those twitter users)
 #todo: handle http timeout error. Stream will stop working once temporary connection failure occurs.
 
 
@@ -39,15 +37,13 @@ class TweetListener(StreamListener):
 
         #if there is a full status text take that instead
         message['status'] = status.text
-        if hasattr(status, "extended_entities"):
-            if hasattr(status.extended_entities, 'full_text'):
-                message['status'] = status.extended_entities.full_text
+        if hasattr(status, "extended_tweet"):
+            message['status'] = status.extended_entities['full_text']
 
         #replace the twitter URL shortened URLs with their unshortened URL
-        #todo: URL replacing doesn't work properly yet.
-        #for url in status.entities['urls']:
-        #    if url['expanded_url'] == None:
-        #        message['status'] = message['status'].replace(url['url'], "[%s](%s)" % (url.display_url, url.expanded_url))
+        for url in status.entities['urls']:
+            if url['expanded_url'] != None:
+                message['status'] = message['status'].replace(url['url'], "[%s](%s)" % (url['display_url'], url['expanded_url']))
 
         #if twitter users have been mentioned, add a link to their twitter handle
         for userMention in status.entities['user_mentions']:
@@ -89,6 +85,11 @@ class Tweets():
         self.auth = None                                            #required for stream.filter (StreamListener, ...)
         self.twitterStreamActive = False
         self.l = None                                               #StreamListener
+        self.colours = ['7f0000', '535900', '40d9ff', '8c7399', 'd97b6c', 'f2ff40', '8fb6bf', '502d59', '66504d',
+                       '89b359', '00aaff', 'd600e6', '401100', '44ff00', '1a2b33', 'ff00aa', 'ff8c40', '17330d',
+                       '0066bf', '33001b', 'b39886', 'bfffd0', '163a59', '8c235b', '8c5e00', '00733d', '000c59',
+                       'ffbfd9', '4c3300', '36d98d', '3d3df2', '590018', 'f2c200', '264d40', 'c8bfff', 'f23d6d',
+                       'd9c36c', '2db3aa', 'b380ff', 'ff0022', '333226', '005c73', '7c29a6']
         if 'consumer_key' in list(self.settings.keys()):
             self.consumer_key = self.settings['consumer_key']
         if 'consumer_secret' in list(self.settings.keys()):
@@ -134,16 +135,13 @@ class Tweets():
             api = self.authenticate()
             user = api.get_user(username)
 
-            colour =\
-                ''.join([randchoice('0123456789ABCDEF')
-                     for x in range(6)])
-            colour = int(colour, 16)
+
+            colour = int(random.choice(self.colours), 16)
             url = "https://twitter.com/" + user.screen_name
             emb = discord.Embed(colour=discord.Colour(value=colour),
                                 url=url,
                                 description=user.description,
                                 timestamp=user.created_at)
-            #emb.set_thumbnail(url=user.profile_image_url)
             emb.set_footer(icon_url='https://cdn1.iconfinder.com/data/icons/iconza-circle-social/64/697029-twitter-512.png',text='Account created on')
             emb.set_author(icon_url=user.profile_image_url, name=user.screen_name)
 
@@ -161,7 +159,7 @@ class Tweets():
     @checks.is_owner()
     async def _add(self, ctx, user_or_list_to_track: str):
         """Adds the twitter user to the list of followed twitter users.
-        Provide a Twitter list (e.g. http://twitter.com/rokxx/lists/dota-2/members) to track multiple twitter users at once."""
+        Provide a Twitter list (e.g. http://twitter.com/rokxx/lists/dota-2/members) to track multiple twitter users at once. Changes apply once the stream is restarted."""
         if user_or_list_to_track is None:
             await self.bot.say("I can't do that, silly!")
         else:
@@ -305,11 +303,6 @@ class Tweets():
         await self.bot.say('Set the access credentials!')
 
     async def user_loop(self):
-        colours = ['7f0000', '535900', '40d9ff', '8c7399', 'd97b6c', 'f2ff40', '8fb6bf', '502d59', '66504d',
-                  '89b359', '00aaff', 'd600e6', '401100', '44ff00', '1a2b33', 'ff00aa', 'ff8c40', '17330d',
-                  '0066bf', '33001b', 'b39886', 'bfffd0', '163a59', '8c235b', '8c5e00', '00733d', '000c59',
-                  'ffbfd9', '4c3300', '36d98d', '3d3df2', '590018', 'f2c200', '264d40', 'c8bfff', 'f23d6d',
-                  'd9c36c', '2db3aa', 'b380ff', 'ff0022', '333226', '005c73', '7c29a6']
 
         await self.bot.wait_until_ready()
         await self.bot.on_ready()
@@ -339,26 +332,34 @@ class Tweets():
             await asyncio.sleep(1)
             while not q.empty():
                 tweet = q.get()
-
+                #todo: set level, retrieve the information from settings.json
+                #todo: add a command for setting the level
+                #stream.filter provide all tweets by default
+                #1: all tweets (followed-user tweets and tweets replying to followed-user
+                #2: only tweets from followed user
+                #3: only tweets from followed user, not replying to someone else
                 for serverID in self.settings["servers"]:
                     for channelID in self.settings['servers'][serverID]['channels'].keys():
                         channel = discord.utils.get(self.bot.get_all_channels(), id=channelID)
-                        if tweet['user_id'] in self.settings["servers"][serverID]['channels'][channelID]['users']:
+                        if channel != None:
+                            #currently: only take tweets from followed user.
+                            if tweet['user_id'] in self.settings["servers"][serverID]['channels'][channelID]['users']:
 
 
-                            em = discord.Embed(#title=tweet['name'],
-                                               url="https://twitter.com/" + tweet['screen_name'] + "/status/" + str(tweet['status_id']),
-                                               description=tweet['status'],
-                                               timestamp=tweet['created_at'],
-                                               colour=int(random.choice(colours), 16))
+                                em = discord.Embed(url="https://twitter.com/" + tweet['screen_name'] + "/status/" + str(tweet['status_id']),
+                                                   description=tweet['status'],
+                                                   timestamp=tweet['created_at'],
+                                                   colour=int(random.choice(self.colours), 16))
 
-                            if tweet['media_url'] != '':
-                                em.set_image(url=tweet['media_url'])
+                                if tweet['media_url'] != '':
+                                    em.set_image(url=tweet['media_url'])
 
-                            em.set_author(icon_url=tweet['avatar_url'],name=tweet['screen_name']) #,url='http://google.com')
-                            em.set_footer(icon_url='https://cdn1.iconfinder.com/data/icons/iconza-circle-social/64/697029-twitter-512.png',text='Tweet created on')
+                                em.set_author(icon_url=tweet['avatar_url'],name=tweet['screen_name']) #,url='http://google.com')
+                                em.set_footer(icon_url='https://cdn1.iconfinder.com/data/icons/iconza-circle-social/64/697029-twitter-512.png',text='Tweet created on')
 
-                            await self.bot.send_message(channel, embed=em)
+                                await self.bot.send_message(channel, embed=em)
+                        #else:
+                        #    print('%s does not exist' %channelID)
 
 def check_folder():
     if not os.path.exists("data/tweets"):
