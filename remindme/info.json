@@ -1,6 +1,6 @@
 {
     "AUTHOR" : "Linley#7952",
-    "DESCRIPTION" : "Sends you the message you want when the time is up.\nSee [p]help RemindMe\nExample: [p]remindme 3 days Have sushi with Asu and JennJenn\nSome slight modification from Twentysix26's 26-Cogs",
+    "DESCRIPTION" : "Sends you the message you want when the time is up.\nSee [p]help RemindMe\nExample: [p]remindme 3:00:00 buy groceries\nSome slight modification on Twentysix26's 26-Cogs",
     "SHORT" : "Never forget anything anymore",
     "DISABLED" : false,
     "NAME" : "RemindMe",
