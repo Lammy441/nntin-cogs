@@ -14,6 +14,7 @@ except:
 import os
 
 #todo: handle http timeout error. Stream will stop working once temporary connection failure occurs.
+#todo: implement restart
 
 
 class TweetListener(StreamListener):
@@ -113,12 +114,12 @@ class Tweets():
 
     def authenticate(self):
         """Authenticate with Twitter's API"""
-        #todo: if invalid credentials, tell the user.
         if self.api == None:        #if not authenticated, do it now.
-            auth = tw.OAuthHandler(self.consumer_key, self.consumer_secret)
-            auth.set_access_token(self.access_token, self.access_secret)
-            self.api = API(auth)
-            self.auth = auth
+            if self.consumer_key and self.consumer_secret and self.access_token and self.access_secret:
+                auth = tw.OAuthHandler(self.consumer_key, self.consumer_secret)
+                auth.set_access_token(self.access_token, self.access_secret)
+                self.api = API(auth)
+                self.auth = auth
         return self.api
 
     @commands.group(pass_context=True, no_pm=True, name='tweets')
@@ -281,26 +282,31 @@ class Tweets():
         """Sets the access credentials. See [p]help tweetset for instructions on getting these"""
         if consumer_key is not None:
             self.settings["consumer_key"] = consumer_key
+            self.consumer_key = consumer_key
         else:
             await self.bot.say("No consumer key provided!")
             return
         if consumer_secret is not None:
             self.settings["consumer_secret"] = consumer_secret
+            self.consumer_secret = consumer_secret
         else:
             await self.bot.say("No consumer secret provided!")
             return
         if access_token is not None:
             self.settings["access_token"] = access_token
+            self.access_token = access_token
         else:
             await self.bot.say("No access token provided!")
             return
         if access_secret is not None:
             self.settings["access_secret"] = access_secret
+            self.access_secret = access_secret
         else:
             await self.bot.say("No access secret provided!")
             return
         dataIO.save_json(self.settings_file, self.settings)
         await self.bot.say('Set the access credentials!')
+        self.api = self.authenticate()
 
     async def user_loop(self):
 
