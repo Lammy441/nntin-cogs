@@ -10,5 +10,5 @@ Install a cogs in my repo with:
 `[p]cog install nntin-cogs cog-name-here`  
 
 ## cogs
-remindme: based on [26-cogs](https://github.com/Twentysix26/26-Cogs/) with slight modification on the syntax for easier usage.  
-tweets: based on [palmtree5-cogs](https://github.com/palmtree5/palmtree5-cogs) and [discord-twitter-bot](https://github.com/NNTin/discord-twitter-bot)
+remindme: based on [26-cogs](https://github.com/Twentysix26/26-Cogs/) with slight modification on the syntax for easier usage.
+tweets: based on [palmtree5-cogs](https://github.com/palmtree5/palmtree5-cogs) and [discord-twitter-bot](https://github.com/NNTin/discord-twitter-bot) **unstable/project currently abandoned**
