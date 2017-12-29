@@ -1,5 +1,5 @@
 {
-    "AUTHOR" : "Linley#7952",
+    "AUTHOR" : "Linley#8686",
     "DESCRIPTION" : "Sends you the message you want when the time is up.\nSee [p]help RemindMe\nExample: [p]remindme 3:00:00 buy groceries\nSome slight modification on Twentysix26's 26-Cogs",
     "SHORT" : "Never forget anything anymore",
     "DISABLED" : false,
