@@ -1,13 +1,6 @@
 # nntin-cogs
 Some cogs I made/refined and use. If you have questions, message me on [Discord](https://discord.gg/Dkg79tc).
-
-## Installing cogs
-Adding cogs to the Red-DiscordBot:  
-`[p]cog repo add nntin-cogs https://github.com/NNTin/nntin-cogs`  
-Get a list of cogs in my repo:  
-`[p]cog list nntin-cogs`  
-Install a cogs in my repo with:  
-`[p]cog install nntin-cogs cog-name-here`  
+Project is WIP as I am updating it to Red v3.
 
 ## cogs
 remindme: based on [26-cogs](https://github.com/Twentysix26/26-Cogs/) with slight modification on the syntax for easier usage.
