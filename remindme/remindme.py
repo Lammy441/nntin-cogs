@@ -2,6 +2,7 @@ from discord.ext import commands
 import asyncio
 import time
 import re
+from time import gmtime, strftime
 
 from redbot.core import Config
 
@@ -80,10 +81,21 @@ class RemindMe:
             for user in users:
                 user_group = self.config.user(user)
                 async with user_group.reminders() as reminders:
+                    removeThese = []
                     for reminder in reminders:
                         if reminder["FUTURE"] <= int(time.time()):
-                            await user.send("You asked me to remind you this: \n{}".format(reminder["TEXT"]))
-                            reminders.remove(reminder)
-                            break       #removing multiple times in a loop from an array is dangerous -> break: remove only once from a loop
+                            try:
+                                removeThese.append(reminder)
+                                await user.send("You asked me to remind you this: \n{}".format(reminder["TEXT"]))
+                            except:
+                                print(strftime("[%Y-%m-%d %H:%M:%S]", gmtime()), " Unknown Error 1. Check RemindMe")
+                    for removeThis in removeThese:
+                        try:
+                            reminders.remove(removeThis)
+                        except PermissionError:
+                            print(strftime("[%Y-%m-%d %H:%M:%S]", gmtime()), " PermissionError")
+                        except ValueError:
+                            print(strftime("[%Y-%m-%d %H:%M:%S]", gmtime()), " ValueError")
+                        except:
+                            print(strftime("[%Y-%m-%d %H:%M:%S]", gmtime()), " Unknown Error 2. Check RemindMe")
             await asyncio.sleep(5)
-            print('heartbeat')
