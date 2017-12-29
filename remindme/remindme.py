@@ -16,10 +16,10 @@ class RemindMe:
         'FUTURE': None,
         'TEXT': None
     }
+    conf_id = 800858686
 
     def __init__(self, bot):
         self.bot = bot
-        self.conf_id = 800858686
         self.config = Config.get_conf(self, self.conf_id)
         self.config.register_user(**self.default_user)
 
@@ -84,18 +84,17 @@ class RemindMe:
                     removeThese = []
                     for reminder in reminders:
                         if reminder["FUTURE"] <= int(time.time()):
-                            try:
-                                removeThese.append(reminder)
-                                await user.send("You asked me to remind you this: \n{}".format(reminder["TEXT"]))
-                            except:
-                                print(strftime("[%Y-%m-%d %H:%M:%S]", gmtime()), " Unknown Error 1. Check RemindMe")
+                            removeThese.append(reminder)
+                            await user.send("You asked me to remind you this: \n{}".format(reminder["TEXT"]))
                     for removeThis in removeThese:
-                        try:
+                        if removeThis in reminders:
                             reminders.remove(removeThis)
-                        except PermissionError:
-                            print(strftime("[%Y-%m-%d %H:%M:%S]", gmtime()), " PermissionError")
-                        except ValueError:
-                            print(strftime("[%Y-%m-%d %H:%M:%S]", gmtime()), " ValueError")
-                        except:
-                            print(strftime("[%Y-%m-%d %H:%M:%S]", gmtime()), " Unknown Error 2. Check RemindMe")
             await asyncio.sleep(5)
+
+    async def handle_exception(self):
+        while self is self.bot.get_cog("RemindMe"):
+            try:
+                await self.check_reminders()
+            except:
+                print("Exception consumed. Sleeping for 10 seconds.")
+                await asyncio.sleep(10)
