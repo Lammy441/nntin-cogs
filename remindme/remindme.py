@@ -29,7 +29,6 @@ class RemindMe:
         [p]remindme 10:00 remind me in 10 minutes"""
 
         pattern = 'remindme (((?P<hours>\d+):)?(?P<minutes>\d{1,2}):)?(?P<seconds>\d{1,2})( (?P<reason>.*))?'
-
         m = re.search(pattern, ctx.message.content)
         reason = m.group('reason')
         hours, minutes, seconds = m.group('hours'), m.group('minutes'), m.group('seconds')
@@ -45,7 +44,6 @@ class RemindMe:
             return
 
         future = int(time.time()+totalSeconds)
-
         reminder = {
             'FUTURE': future,
             'TEXT': reason
@@ -59,7 +57,7 @@ class RemindMe:
 
         embed = discord.Embed(title='⏰ Private messaging in %d:%02d:%02d' % (h, m, s), description=reason)
         embed.set_author(icon_url=ctx.author.avatar_url_as(), name=ctx.message.author.name)
-        embed.set_footer(text='NNTin cogs', icon_url='https://i.imgur.com/6LfN4cd.png')
+        embed.set_footer(text='I will remind you on', icon_url='https://i.imgur.com/6LfN4cd.png')
         embed.timestamp = datetime.utcfromtimestamp(future)
 
         await ctx.send(content=None, embed=embed)
@@ -70,15 +68,36 @@ class RemindMe:
         user_group = self.config.user(ctx.author)
         async with user_group.reminders() as reminders:
             reminders.clear()
-        await ctx.send("Reminders are cleared")
+
+        embed = discord.Embed(title='⏰ Reminders cleared')
+        embed.set_author(icon_url=ctx.author.avatar_url_as(), name=ctx.message.author.name)
+
+        await ctx.send(content=None, embed=embed)
+
+
 
     @commands.command()
     async def showreminders(self, ctx):
         """Show all your reminders."""
         user_group = self.config.user(ctx.author)
-        async with user_group.reminders() as reminders:
-            await ctx.send("Your reminders are: {}".format(reminders))
+        reminderEmpty = True
+        embed = discord.Embed()
+        embed.set_author(icon_url=ctx.author.avatar_url_as(), name=ctx.message.author.name)
+        embed.set_footer(text='This message was created on', icon_url='https://i.imgur.com/6LfN4cd.png')
+        embed.timestamp = datetime.utcnow()
 
+        async with user_group.reminders() as reminders:
+            for reminder in reminders:
+                reminderEmpty = False
+                timedelta = datetime.utcfromtimestamp(reminder["FUTURE"]) - datetime.utcnow()
+                totalSeconds = timedelta.total_seconds()
+                m, s = divmod(totalSeconds, 60)
+                h, m = divmod(m, 60)
+                text = '⏰ Reminder in %d:%02d:%02d' % (h, m, s)
+                embed.add_field(name=text, value=reminder["TEXT"], inline=False)
+        if reminderEmpty:
+            embed.add_field(name="Error", value="You don't have any reminders")
+        await ctx.send(content=None, embed=embed)
 
     async def check_reminders(self):
         while self is self.bot.get_cog("RemindMe"):
@@ -90,7 +109,11 @@ class RemindMe:
                     for reminder in reminders:
                         if reminder["FUTURE"] <= int(time.time()):
                             removeThese.append(reminder)    #removing an element from an array while iterating over an array is a bad idea
-                            await user.send("You asked me to remind you this: \n{}".format(reminder["TEXT"]))
+                            embed = discord.Embed(title='⏰ Reminder',
+                                                  description=reminder["TEXT"])
+                            embed.set_author(icon_url=user.avatar_url_as(), name=user.name)
+                            embed.set_footer(text='NNTin cogs', icon_url='https://i.imgur.com/6LfN4cd.png')
+                            await user.send(content=None, embed=embed)
                     for removeThis in removeThese:
                         if removeThis in reminders:
                             reminders.remove(removeThis)
