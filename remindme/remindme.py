@@ -3,7 +3,7 @@ import asyncio, time, re, discord
 from time import gmtime, strftime
 from datetime import datetime
 
-from redbot.core import Config
+from redbot.core import Config, checks
 
 class RemindMe:
     """Never forget anything anymore."""
@@ -23,11 +23,12 @@ class RemindMe:
         self.config.register_user(**self.default_user)
 
     @commands.command()
+    @commands.bot_has_permissions(send_messages=True)
     async def remindme(self, ctx, hms: str, text: str):
         """Sends you <text> when the time (hours:minutes:seconds) is up
         Example:
         [p]remindme 10:00 remind me in 10 minutes"""
-
+        await ctx.trigger_typing()
         pattern = 'remindme (((?P<hours>\d+):)?(?P<minutes>\d{1,2}):)?(?P<seconds>\d{1,2})( (?P<reason>.*))?'
         m = re.search(pattern, ctx.message.content)
         reason = m.group('reason')
@@ -60,11 +61,15 @@ class RemindMe:
         embed.set_footer(text='I will remind you on', icon_url='https://i.imgur.com/6LfN4cd.png')
         embed.timestamp = datetime.utcfromtimestamp(future)
 
+        #todo: implement warning if bot has no permission to direct message user
+
         await ctx.send(content=None, embed=embed)
 
     @commands.command()
+    @commands.bot_has_permissions(send_messages=True)
     async def forgetme(self, ctx):
         """Removes all your upcoming notifications."""
+        await ctx.trigger_typing()
         user_group = self.config.user(ctx.author)
         async with user_group.reminders() as reminders:
             reminders.clear()
@@ -77,8 +82,10 @@ class RemindMe:
 
 
     @commands.command()
+    @commands.bot_has_permissions(send_messages=True)
     async def showreminders(self, ctx):
         """Show all your reminders."""
+        await ctx.trigger_typing()
         user_group = self.config.user(ctx.author)
         reminderEmpty = True
         embed = discord.Embed()
@@ -124,5 +131,5 @@ class RemindMe:
             try:
                 await self.check_reminders()
             except:
-                print(strftime("[%Y-%m-%d %H:%M:%S]", gmtime()), " Exception consumed in remindme")
+                #print(strftime("[%Y-%m-%d %H:%M:%S]", gmtime()), " Exception consumed in remindme")
                 await asyncio.sleep(10)
