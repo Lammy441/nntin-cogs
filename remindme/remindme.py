@@ -1,8 +1,7 @@
 from discord.ext import commands
-import asyncio
-import time
-import re
+import asyncio, time, re, discord
 from time import gmtime, strftime
+from datetime import datetime
 
 from redbot.core import Config
 
@@ -39,10 +38,10 @@ class RemindMe:
         totalSeconds = int(hours) * 3600 + int(minutes) * 60 + int(seconds)
 
         if totalSeconds < 1:
-            await self.bot.say("Quantity must not be 0 or negative.")
+            await ctx.send("Quantity must not be 0 or negative.")
             return
         if len(reason) > 1960:
-            await self.bot.say("Text is too long.")
+            await ctx.send("Text is too long.")
             return
 
         future = int(time.time()+totalSeconds)
@@ -57,7 +56,13 @@ class RemindMe:
 
         m, s = divmod(totalSeconds, 60)
         h, m = divmod(m, 60)
-        await ctx.send('Private messaging <@%s> in %d:%02d:%02d' % (ctx.message.author.id, h, m, s))
+
+        embed = discord.Embed(title='⏰ Private messaging in %d:%02d:%02d' % (h, m, s), description=reason)
+        embed.set_author(icon_url=ctx.author.avatar_url_as(), name=ctx.message.author.name)
+        embed.set_footer(text='NNTin cogs', icon_url='https://i.imgur.com/6LfN4cd.png')
+        embed.timestamp = datetime.utcfromtimestamp(future)
+
+        await ctx.send(content=None, embed=embed)
 
     @commands.command()
     async def forgetme(self, ctx):
@@ -84,7 +89,7 @@ class RemindMe:
                     removeThese = []
                     for reminder in reminders:
                         if reminder["FUTURE"] <= int(time.time()):
-                            removeThese.append(reminder)
+                            removeThese.append(reminder)    #removing an element from an array while iterating over an array is a bad idea
                             await user.send("You asked me to remind you this: \n{}".format(reminder["TEXT"]))
                     for removeThis in removeThese:
                         if removeThis in reminders:
@@ -96,5 +101,5 @@ class RemindMe:
             try:
                 await self.check_reminders()
             except:
-                print("Exception consumed. Sleeping for 10 seconds.")
+                print(strftime("[%Y-%m-%d %H:%M:%S]", gmtime()), " Exception consumed in remindme")
                 await asyncio.sleep(10)
