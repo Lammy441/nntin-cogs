@@ -26,9 +26,9 @@ class Tweets():
                 "twitter_ids": []
             }
     default_channel = {
-            "IncludeReplyToUser" : False,
-            "IncludeRetweet" : False,
-            "IncludeUserReply" : False,
+            "IncludeReplyToUser" : True,
+            "IncludeRetweet" : True,
+            "IncludeUserReply" : True,
             "twitter_ids" : [],
             "webhook_urls" : [] #This will only contain one value. Using an array however since another project of mine can accept multiple webhooks.
         }
@@ -66,6 +66,9 @@ class Tweets():
         await ctx.send('Twitter credentials have been set. Testing the Twitter credentials...')
         await ctx.trigger_typing()
         await self.checkcreds(ctx)
+
+
+
 
     @commands.command()
     @commands.bot_has_permissions(send_messages=True)
@@ -107,9 +110,47 @@ class Tweets():
 
         channel_group = self.config.channel(ctx.channel)
         async with channel_group.twitter_ids() as twitter_ids:
-            twitter_ids.extend(validtwitterids)
+            for validtwitterid in validtwitterids:
+                if validtwitterid not in twitter_ids:
+                    twitter_ids.append(validtwitterid)
 
         await ctx.send(content=None, embed=embed)
+
+    @commands.command()
+    @commands.bot_has_permissions(send_messages=True)
+    @checks.is_owner()
+    async def getfollow(self, ctx):
+        """Get all Twitter IDs that are being followed in this text channel"""
+        channel_group = self.config.channel(ctx.channel)
+        async with channel_group.twitter_ids() as twitter_ids:
+            await ctx.send(twitter_ids)
+
+    @commands.command()
+    @commands.bot_has_permissions(send_messages=True)
+    @checks.is_owner()
+    async def unfollow(self, ctx, twitter_ids):
+        """Unfollow Twitter IDs"""
+        pattern = '((?P<id>\d+)( |,|)+)'
+        twitterids = []
+        for m in re.finditer(pattern, ctx.message.content):
+            twitterids.append(str(m.group('id')))
+
+        unfollowed = []
+        notfound = []
+        channel_group = self.config.channel(ctx.channel)
+        async with channel_group.twitter_ids() as twitter_ids:
+            for twitterid in twitterids:
+                if twitterid in twitter_ids:
+                    twitter_ids.remove(twitterid)
+                    unfollowed.append(twitterid)
+                else:
+                    notfound.append(twitterid)
+
+        await ctx.send('unfollowed: {}, not found: {}'.format(unfollowed, notfound))
+
+
+
+
 
     @commands.command()
     @commands.bot_has_permissions(send_messages=True)
@@ -117,6 +158,36 @@ class Tweets():
     async def createwh(self, ctx, createNew=True):
         """Creates a webhook for the text channel if it doesn't exist"""
         await self.checkwh(ctx, createNew=True)
+
+
+
+
+
+
+    @commands.command()
+    @commands.bot_has_permissions(send_messages=True)
+    @checks.is_owner()
+    async def build(self, ctx):
+        async with self.config.Discord() as Discord:
+            Discord.clear()
+
+            for guild in self.bot.guilds:   #go through every server
+                for channel in guild.channels:  #go through every text channel
+                    channel_group = self.config.channel(channel)
+                    async with channel_group() as channel_config:
+                        if 'twitter_ids' in channel_config and 'webhook_urls' in channel_config:
+                            if channel_config['twitter_ids'] and channel_config['webhook_urls']:
+                                Discord.append(channel_config)
+
+
+
+
+
+
+
+
+
+
 
     async def checkwh(self, ctx, createNew):
         channel_group = self.config.channel(ctx.channel)
@@ -161,7 +232,6 @@ class Tweets():
         while self is self.bot.get_cog("Tweets"):
             try:
                 await asyncio.sleep(10)
-                #await self.check_reminders()
             except:
-                print(strftime("[%Y-%m-%d %H:%M:%S]", gmtime()), " Exception consumed in remindme")
+                print(strftime("[%Y-%m-%d %H:%M:%S]", gmtime()), " Exception consumed in tweets")
                 await asyncio.sleep(10)
