@@ -38,7 +38,9 @@ class Tweets():
         self.config.register_global(**self.default_global)
         self.config.register_channel(**self.default_channel)
         self.client = None
-        self.checkcreds(ctx=None)
+        loop = asyncio.get_event_loop()
+        loop.create_task(self.checkcreds(ctx=None))
+
 
     @commands.command()
     @commands.bot_has_permissions(send_messages=True)
