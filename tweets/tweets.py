@@ -1,6 +1,7 @@
 from discord.ext import commands
 from time import gmtime, strftime
-import asyncio
+from datetime import datetime
+import asyncio, re, discord
 
 try:
     import tweepy
@@ -42,6 +43,8 @@ class Tweets():
         loop.create_task(self.checkcreds(ctx=None))
 
 
+
+
     @commands.command()
     @commands.bot_has_permissions(send_messages=True)
     @checks.is_owner()
@@ -63,6 +66,70 @@ class Tweets():
         await ctx.send('Twitter credentials have been set. Testing the Twitter credentials...')
         await ctx.trigger_typing()
         await self.checkcreds(ctx)
+
+    @commands.command()
+    @commands.bot_has_permissions(send_messages=True)
+    @checks.is_owner()
+    async def follow(self, ctx, userIDs):
+        """Follows a Twitter user. Get the Twitter ID from http://gettwitterid.com
+        Example:
+        [p]follow 3065618342"""
+        if self.client == None:
+            await ctx.send("You need to set your Twitter credentials")
+            return
+
+        #await self.checkwh(ctx, createNew=False) #todo:enable it later
+        pattern = '((?P<id>\d+)( |,|)+)'
+        twitterids = []
+        for m in re.finditer(pattern, ctx.message.content):
+            twitterids.append(str(m.group('id')))
+
+        validtwitterids = []
+        user_objs = []
+        user_count = len(twitterids)
+
+        for i in range(0, int((user_count // 100)) + 1):
+            try:
+                user_objs.extend(
+                    self.client.lookup_users(user_ids=twitterids[i * 100:min((i + 1) * 100, user_count)]))
+            except:
+                print(strftime("[%Y-%m-%d %H:%M:%S]", gmtime()), " Error while looking up twitter ids (possibly non are valid)")
+
+        embed = discord.Embed()
+        embed.set_author(icon_url=ctx.author.avatar_url_as(), name=ctx.message.author.name)
+        embed.set_footer(text='This message was created on', icon_url='https://i.imgur.com/6LfN4cd.png')
+        embed.timestamp = datetime.utcnow()
+
+
+        for user in user_objs:
+            embed.add_field(name='Twitter User added', value='twitter id: {} -> screen name: {}'.format(user.id, user.screen_name), inline=False)
+            validtwitterids.append(str(user.id))
+
+        channel_group = self.config.channel(ctx.channel)
+        async with channel_group.twitter_ids() as twitter_ids:
+            twitter_ids.extend(validtwitterids)
+
+        await ctx.send(content=None, embed=embed)
+
+    @commands.command()
+    @commands.bot_has_permissions(send_messages=True)
+    @checks.is_owner()
+    async def createwh(self, ctx, createNew=True):
+        """Creates a webhook for the text channel if it doesn't exist"""
+        await self.checkwh(ctx, createNew=True)
+
+    async def checkwh(self, ctx, createNew):
+        channel_group = self.config.channel(ctx.channel)
+        async with channel_group.webhook_urls() as webhook_urls:
+            if not webhook_urls:
+                webhook = await ctx.channel.create_webhook(name='tweets')
+                webhook_urls.append(webhook.url)
+            else:
+                if createNew:
+                    webhook_urls[0] = (await ctx.channel.create_webhook(name='tweets')).url
+        if createNew:
+            await ctx.send('Webhook created.')
+
 
     async def checkcreds(self, ctx):
         if tweepy == None:
