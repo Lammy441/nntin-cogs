@@ -4,7 +4,7 @@
     "NAME" : "Tweets",
     "DISABLED" : false,
     "SHORT" : "Cog for streaming info from Twitter",
-    "REQUIREMENTS" : ["tweepy"],
+    "REQUIREMENTS" : ["tweepy", "requests"],
     "DESCRIPTION" : "Gets public information from Twitter's API",
     "TAGS": ["twitter", "utility"]
 }
