@@ -1,16 +1,20 @@
 from discord.ext import commands
 from time import gmtime, strftime
 from datetime import datetime
+from .discordtwitterwebhook import StdOutListener
+from .streamasync import StreamAsync
 import asyncio, re, discord
 
 try:
     import tweepy
     from tweepy.api import API
-    from tweepy.streaming import StreamListener
+    from tweepy import OAuthHandler
 except:
     tweepy = None
 
 from redbot.core import Config, checks
+
+#todo:limit commands (e.g. follow only in text channels)
 
 class Tweets():
     """Cog for displaying info from Twitter's API"""
@@ -39,10 +43,13 @@ class Tweets():
         self.config.register_global(**self.default_global)
         self.config.register_channel(**self.default_channel)
         self.client = None
+        self.stream = None
         loop = asyncio.get_event_loop()
         loop.create_task(self.checkcreds(ctx=None))
 
-
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.stream:
+            self.stream.disconnect()
 
 
     @commands.command()
@@ -67,6 +74,40 @@ class Tweets():
         await ctx.trigger_typing()
         await self.checkcreds(ctx)
 
+    @commands.command()
+    @commands.bot_has_permissions(send_messages=True)
+    @checks.is_owner()
+    async def followlist(self, ctx, userIDs):
+        """Subscribe to a Twitter List
+        Example:
+        [p]followlist https://twitter.com/rokxx/lists/dota-2"""
+        if self.client == None:
+            await ctx.send("You need to set your Twitter credentials")
+            return
+
+        await ctx.trigger_typing()
+        await self.checkwh(ctx, createNew=False)
+
+        twitterids = []
+        pattern = 'https?:\/\/(?:www\.)?twitter\.com\/(?P<twittername>[a-zA-Z0-9]+)\/lists\/(?P<listname>[a-zA-Z0-9-]+)'
+        for m in re.finditer(pattern, ctx.message.content, re.I):
+            for member in tweepy.Cursor(self.client.list_members, m.group('twittername'), m.group('listname')).items():
+                twitterID = member._json['id_str']
+                if twitterID not in twitterids:
+                    twitterids.append(twitterID)
+
+        added = []
+        alreadyadded = []
+
+        channel_group = self.config.channel(ctx.channel)
+        async with channel_group.twitter_ids() as twitter_ids:
+            for twitterid in twitterids:
+                if twitterid not in twitter_ids:
+                    twitter_ids.append(twitterid)
+                    added.append(twitterid)
+                else:
+                    alreadyadded.append(twitterid)
+            await ctx.send('added {} twitter users, already added {} twitter users'.format(len(added), len(alreadyadded)))
 
 
 
@@ -81,7 +122,8 @@ class Tweets():
             await ctx.send("You need to set your Twitter credentials")
             return
 
-        #await self.checkwh(ctx, createNew=False) #todo:enable it later
+        await ctx.trigger_typing()
+        await self.checkwh(ctx, createNew=False)
         pattern = '((?P<id>\d+)( |,|)+)'
         twitterids = []
         for m in re.finditer(pattern, ctx.message.content):
@@ -103,10 +145,12 @@ class Tweets():
         embed.set_footer(text='This message was created on', icon_url='https://i.imgur.com/6LfN4cd.png')
         embed.timestamp = datetime.utcnow()
 
-
-        for user in user_objs:
-            embed.add_field(name='Twitter User added', value='twitter id: {} -> screen name: {}'.format(user.id, user.screen_name), inline=False)
-            validtwitterids.append(str(user.id))
+        if user_objs:
+            for user in user_objs:
+                embed.add_field(name='Twitter User added', value='twitter id: {} -> screen name: {}'.format(user.id, user.screen_name), inline=False)
+                validtwitterids.append(str(user.id))
+        else:
+            embed.add_field(name='Error', value='None of the twitter ids were valid.')
 
         channel_group = self.config.channel(ctx.channel)
         async with channel_group.twitter_ids() as twitter_ids:
@@ -121,6 +165,7 @@ class Tweets():
     @checks.is_owner()
     async def getfollow(self, ctx):
         """Get all Twitter IDs that are being followed in this text channel"""
+        #todo: check if character count > 2000
         channel_group = self.config.channel(ctx.channel)
         async with channel_group.twitter_ids() as twitter_ids:
             await ctx.send(twitter_ids)
@@ -148,9 +193,25 @@ class Tweets():
 
         await ctx.send('unfollowed: {}, not found: {}'.format(unfollowed, notfound))
 
+    @commands.command()
+    @commands.bot_has_permissions(send_messages=True)
+    @checks.is_owner()
+    async def unfollowall(self, ctx):
+        """Clears the Twitter list in the channel"""
+        channel_group = self.config.channel(ctx.channel)
+        async with channel_group.twitter_ids() as twitter_ids:
+            await ctx.send('Deleted {} twitter ids.'.format(len(twitter_ids)))
+            twitter_ids.clear()
 
-
-
+    @commands.command()
+    @commands.bot_has_permissions(send_messages=True)
+    @checks.is_owner()
+    async def test(self, ctx, createNew=True):
+        async with self.config.Discord() as Discord:
+            print(Discord)
+        channel_group = self.config.channel(ctx.channel)
+        async with channel_group.twitter_ids() as webhook_urls:
+            await ctx.send(len(webhook_urls))
 
     @commands.command()
     @commands.bot_has_permissions(send_messages=True)
@@ -159,31 +220,59 @@ class Tweets():
         """Creates a webhook for the text channel if it doesn't exist"""
         await self.checkwh(ctx, createNew=True)
 
-
-
-
-
+    @commands.command()
+    @commands.bot_has_permissions(send_messages=True)
+    @checks.is_owner()
+    async def disconnect(self, ctx):
+        """Disconnects the twitter stream"""
+        if self.stream:
+            self.stream.disconnect()
+            self.stream = None
+        await ctx.send('Disconnecting the stream')
 
     @commands.command()
     @commands.bot_has_permissions(send_messages=True)
     @checks.is_owner()
     async def build(self, ctx):
+        await ctx.send('building')
+        await ctx.trigger_typing()
+
+        async with self.config.twitter_ids() as twitter_ids:
+            async with self.config.Discord() as Discord:
+                Discord.clear()
+
+
+                #todo: fix bug. it's the exact same channel_config multiple times
+                for guild in self.bot.guilds:   #go through every server
+                    for channel in guild.channels:  #go through every text channel
+                        channel_group = self.config.channel(channel)
+                        async with channel_group() as channel_config:
+                            if 'twitter_ids' in channel_config and 'webhook_urls' in channel_config:
+                                if channel_config['twitter_ids'] and channel_config['webhook_urls']:
+                                    Discord.append(channel_config)
+            for instance in Discord:
+                for twitter_id in instance['twitter_ids']:
+                    if twitter_id not in twitter_ids:
+                        twitter_ids.append(twitter_id)
+
+            await ctx.send('You are currently tracking {} twitter users'.format(len(twitter_ids)))
+
+
+
         async with self.config.Discord() as Discord:
-            Discord.clear()
-
-            for guild in self.bot.guilds:   #go through every server
-                for channel in guild.channels:  #go through every text channel
-                    channel_group = self.config.channel(channel)
-                    async with channel_group() as channel_config:
-                        if 'twitter_ids' in channel_config and 'webhook_urls' in channel_config:
-                            if channel_config['twitter_ids'] and channel_config['webhook_urls']:
-                                Discord.append(channel_config)
+            l = StdOutListener(dataD=Discord)
+        async with self.config.Twitter() as Twitter:
+            auth = OAuthHandler(Twitter['consumer_key'], Twitter['consumer_secret'])
+            auth.set_access_token(Twitter['access_token'], Twitter['access_token_secret'])
 
 
+        self.stream = StreamAsync(auth, l)  #overwriting tweepy.Stream since it does not allow manual setting async to True
 
+        async with self.config.twitter_ids() as twitter_ids:
+            self.stream.filter(follow=twitter_ids)
 
-
-
+        print('\n\n\nHey it worked!')
+        await ctx.send('Hey it worked!')
 
 
 
@@ -198,8 +287,8 @@ class Tweets():
             else:
                 if createNew:
                     webhook_urls[0] = (await ctx.channel.create_webhook(name='tweets')).url
-        if createNew:
-            await ctx.send('Webhook created.')
+            if createNew:
+                await ctx.send('Webhook created: {}'.format(webhook_urls[0]))
 
 
     async def checkcreds(self, ctx):
