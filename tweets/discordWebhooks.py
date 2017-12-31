@@ -25,10 +25,10 @@ class Webhook():
         Add a specified Attachment to self.attachments for later usage.
         @param {Attachment} attachment - The Attachment object to append.
         """
-        if isinstance(attachment, Embed):
-            self.attachments.append(attachment)
-        else:
-            raise Exception("The attachment is not a correct attachment object")
+        #if isinstance(attachment, Embed):      #on tweets cog reload this is causing problem. It thinks it is a different object/class when it is not.
+        self.attachments.append(attachment)
+        #else:
+        #    raise Exception("The attachment is not a correct attachment object")
 
     def format(self):
         """
@@ -117,10 +117,10 @@ class Embed(classmethod):
         Add a field to the current Attachment object.
         @param {Fields} field - The field object to add to this attachment.
         """
-        if isinstance(field, Field):
-            self.fields.append(field)
-        else:
-            raise Exception("The field is not a correct field object")
+        #if isinstance(field, Field):   #on tweets cog reload this is causing problem.
+        self.fields.append(field)
+        #else:
+        #    raise Exception("The field is not a correct field object")
 
 class Field():
     def __init__(self, title="", value="", short=False):

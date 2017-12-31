@@ -18,8 +18,13 @@ class StdOutListener(StreamListener):
         else:
             self.dataD = dataD
 
-
     def on_status(self, status):
+        try:
+            return self.on_status_(status)
+        except:
+            return True
+
+    def on_status_(self, status):
         """Called when a new status arrives"""
 
         colors = [0x7f0000, 0x535900, 0x40d9ff, 0x8c7399, 0xd97b6c, 0xf2ff40, 0x8fb6bf, 0x502d59, 0x66504d,
@@ -152,7 +157,7 @@ class StdOutListener(StreamListener):
         """Called when a non-200 status code is returned"""
         print('on_error')
         print(status_code)
-        return False
+        return #False   #if it returns False the stream will stop
 
     def on_disconnect(self, notice):
         """Called when twitter sends a disconnect notice
