@@ -4,7 +4,8 @@ from datetime import datetime
 from .discordtwitterwebhook import StdOutListener
 from .streamasync import StreamAsync
 from .embedmenu import EmbedMenu
-import asyncio, re, discord
+from .langtoflag import LangToFlag
+import asyncio, re, discord, json
 
 try:
     import tweepy
@@ -48,6 +49,7 @@ class Tweets(EmbedMenu):
         self.config.register_channel(**self.default_channel)
         self.client = None
         self.stream = None
+        self.ltf = LangToFlag()
         loop = asyncio.get_event_loop()
         loop.create_task(self.checkcreds(ctx=None))
 
@@ -135,15 +137,8 @@ class Tweets(EmbedMenu):
             twitterids.append(str(m.group('id')))
 
         validtwitterids = []
-        user_objs = []
-        user_count = len(twitterids)
 
-        for i in range(0, int((user_count // 100)) + 1):
-            try:
-                user_objs.extend(
-                    self.client.lookup_users(user_ids=twitterids[i * 100:min((i + 1) * 100, user_count)]))
-            except:
-                print(strftime("[%Y-%m-%d %H:%M:%S]", gmtime()), " Error while looking up twitter ids (possibly non are valid)")
+        user_objs = await self.lookup_users(twitterids)
 
         embed = discord.Embed()
         embed.set_author(icon_url=ctx.author.avatar_url_as(), name=ctx.message.author.name)
@@ -169,18 +164,26 @@ class Tweets(EmbedMenu):
     @commands.bot_has_permissions(send_messages=True)
     @checks.is_owner()
     async def getfollow(self, ctx):
-        """Get all Twitter IDs that are being followed in this text channel"""
+        """Displays the followed Twitter users in this channel."""
+        await ctx.trigger_typing()
         field_list = []
         channel_group = self.config.channel(ctx.channel)
         async with channel_group.twitter_ids() as twitter_ids:
-            for twitter_id in twitter_ids:
-                add = str(twitter_id)
-                field_list.append({'name': add, 'value': add, 'inline': True})
+            user_objs = await self.lookup_users(twitter_ids)
+            if user_objs:
+                for user in user_objs:
+                    field_list.append({'name': '{}'.format(user.screen_name),
+                                       'value':
+                                           '{} id: {}\nverified'.format(self.ltf.ltf(user.lang), user.id)
+                                           if user.verified
+                                           else '{} id: {}'.format(self.ltf.ltf(user.lang), user.id),
+                                       'inline': True})
+            else:
+                await ctx.send('You are not following anyone in this channel.')
 
         embed = discord.Embed(description='This channel tracks the following twitter users:',
                               colour=discord.Colour(value=0x00ff00))
         embed.set_author(icon_url=ctx.author.avatar_url_as(), name=ctx.message.author.name)
-
         await self.embed_menu(ctx=ctx, field_list=field_list, start_at=0, embed=embed)
 
     @commands.command()
@@ -281,6 +284,17 @@ class Tweets(EmbedMenu):
 
         await ctx.send('Twitter stream is now active!')
 
+    async def lookup_users(self, twitterids):
+        user_objs = []
+        user_count = len(twitterids)
+
+        for i in range(0, int((user_count // 100)) + 1):
+            try:
+                user_objs.extend(
+                    self.client.lookup_users(user_ids=twitterids[i * 100:min((i + 1) * 100, user_count)]))
+            except:
+                print(strftime("[%Y-%m-%d %H:%M:%S]", gmtime()), " Error while looking up twitter ids (possibly non are valid)")
+        return user_objs
 
     async def checkwh(self, ctx, createNew):
         channel_group = self.config.channel(ctx.channel)

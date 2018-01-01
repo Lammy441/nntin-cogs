@@ -13,12 +13,17 @@ class EmbedMenu():
     async def _embed_menu(self, ctx, field_list: list,
                           message: discord.Message = None,
                           embed: discord.Embed = None,
-                          start_at=0, timeout: int=15):
+                          start_at=0, timeout: int=15,
+                          fieldamount: int=24):
         """menu control logic for this taken from
            https://github.com/Lunar-Dust/Dusty-Cogs/blob/master/menu/menu.py and
            https://github.com/palmtree5/palmtree5-cogs/blob/master/tweets/tweets.py"""
 
-        fields = field_list[start_at:start_at+25]    #An embed can only show 25 fields
+        # An embed can only show 25 fields
+        # fieldamount default 24 because perfect 2/3 columns
+        if fieldamount > 25: fieldamount = 25
+
+        fields = field_list[start_at:start_at+fieldamount]
 
         if not embed:
             colour = ''.join([choice('0123456789ABCDEF') for x in range(6)])
@@ -29,7 +34,7 @@ class EmbedMenu():
 
         em.set_footer(text='Showing results {} to {} of {}'
                       .format(start_at+1,
-                              start_at+25 if start_at+25 <= len(field_list) else len(field_list),
+                              start_at+fieldamount if start_at+fieldamount <= len(field_list) else len(field_list),
                               len(field_list)),
                       icon_url='https://i.imgur.com/6LfN4cd.png')
 
@@ -67,20 +72,20 @@ class EmbedMenu():
 
         if react == "next":
             next_start_at = 0
-            if start_at >= len(field_list) - 25:
+            if start_at >= len(field_list) - fieldamount:
                 next_start_at = 0  # Overflow to the first item
             else:
-                next_start_at = start_at + 25
+                next_start_at = start_at + fieldamount
             return await self.embed_menu(ctx, field_list, message=message, embed=embed,
                                          start_at=next_start_at, timeout=timeout)
         elif react == "back":
             next_start_at = 0
             if start_at == 0:
-                next_start_at = len(field_list) - 25  # Loop around to the last item
-            elif start_at < 25:
+                next_start_at = len(field_list) - fieldamount  # Loop around to the last item
+            elif start_at < fieldamount:
                 next_start_at = 0
             else:
-                next_start_at = start_at - 25
+                next_start_at = start_at - fieldamount
             return await self.embed_menu(ctx, field_list, message=message, embed=embed,
                                          start_at=next_start_at, timeout=timeout)
         else:
