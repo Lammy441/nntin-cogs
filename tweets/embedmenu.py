@@ -63,6 +63,8 @@ class EmbedMenu():
         reacts = {v: k for k, v in self.emojis.items()}
         react = reacts[react.emoji]
 
+        em.clear_fields()
+
         if react == "next":
             next_start_at = 0
             if start_at >= len(field_list) - 25:
@@ -73,8 +75,10 @@ class EmbedMenu():
                                          start_at=next_start_at, timeout=timeout)
         elif react == "back":
             next_start_at = 0
-            if start_at < 25:
+            if start_at == 0:
                 next_start_at = len(field_list) - 25  # Loop around to the last item
+            elif start_at < 25:
+                next_start_at = 0
             else:
                 next_start_at = start_at - 25
             return await self.embed_menu(ctx, field_list, message=message, embed=embed,
