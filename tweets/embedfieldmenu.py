@@ -83,7 +83,7 @@ class EmbedFieldMenu():
         elif react == "back":
             next_start_at = 0
             if start_at == 0:
-                next_start_at = len(field_list) - fieldamount  # Loop around to the last item
+                next_start_at = max(len(field_list)-fieldamount, 0)  # Loop around to the last item
             elif start_at < fieldamount:
                 next_start_at = 0
             else:
