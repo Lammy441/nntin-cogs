@@ -1,7 +1,10 @@
 import discord
 from random import choice
 
-class EmbedMenu():
+class EmbedFieldMenu():
+    """menu control logic taken from
+    https://github.com/Lunar-Dust/Dusty-Cogs/blob/master/menu/menu.py and
+    https://github.com/palmtree5/palmtree5-cogs/blob/master/tweets/tweets.py"""
     def __init__(self, bot):
         self.bot = bot
         self.emojis = {
@@ -10,14 +13,12 @@ class EmbedMenu():
             "next": "➡"
         }
 
-    async def _embed_menu(self, ctx, field_list: list,
+    async def _field_menu(self, ctx, field_list: list,
                           message: discord.Message = None,
                           embed: discord.Embed = None,
                           start_at=0, timeout: int=15,
-                          fieldamount: int=24):
-        """menu control logic for this taken from
-           https://github.com/Lunar-Dust/Dusty-Cogs/blob/master/menu/menu.py and
-           https://github.com/palmtree5/palmtree5-cogs/blob/master/tweets/tweets.py"""
+                          fieldamount: int=24, autodelete=False):
+
 
         # An embed can only show 25 fields
         # fieldamount default 24 because perfect 2/3 columns
@@ -51,19 +52,20 @@ class EmbedMenu():
         def check_react(r, u):
             return u == ctx.author and r.emoji in list(self.emojis.values())
 
+        react = None
         try:
             react, user = await self.bot.wait_for(
                 "reaction_add", check=check_react, timeout=timeout
             )
         except:
-            return await message.delete()
-
-
-        if react is None:
-            await message.remove_reaction("⬅", ctx.guild.me)
-            await message.remove_reaction("❌", ctx.guild.me)
-            await message.remove_reaction("➡", ctx.guild.me)
-            return None
+            if react is None:
+                if autodelete:
+                    return await message.delete()
+                else:
+                    await message.remove_reaction("⬅", ctx.guild.me)
+                    await message.remove_reaction("❌", ctx.guild.me)
+                    await message.remove_reaction("➡", ctx.guild.me)
+                    return None
 
         reacts = {v: k for k, v in self.emojis.items()}
         react = reacts[react.emoji]
@@ -76,8 +78,8 @@ class EmbedMenu():
                 next_start_at = 0  # Overflow to the first item
             else:
                 next_start_at = start_at + fieldamount
-            return await self.embed_menu(ctx, field_list, message=message, embed=embed,
-                                         start_at=next_start_at, timeout=timeout)
+            return await self.field_menu(ctx, field_list, message=message, embed=embed,
+                                         start_at=next_start_at, timeout=timeout, autodelete=autodelete)
         elif react == "back":
             next_start_at = 0
             if start_at == 0:
@@ -86,13 +88,16 @@ class EmbedMenu():
                 next_start_at = 0
             else:
                 next_start_at = start_at - fieldamount
-            return await self.embed_menu(ctx, field_list, message=message, embed=embed,
-                                         start_at=next_start_at, timeout=timeout)
-        else:
+            return await self.field_menu(ctx, field_list, message=message, embed=embed,
+                                         start_at=next_start_at, timeout=timeout, autodelete=autodelete)
+        elif react == "exit":
             return await message.delete()
+        else:
+            if autodelete:
+                return await message.delete()
 
-    async def embed_menu(self, *args, **kwargs):
+    async def field_menu(self, *args, **kwargs):
         #try:
-        await self._embed_menu(*args, **kwargs)
+        await self._field_menu(*args, **kwargs)
         #except:
         #    print('Error in embed menu')

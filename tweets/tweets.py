@@ -3,7 +3,7 @@ from time import gmtime, strftime
 from datetime import datetime
 from .discordtwitterwebhook import StdOutListener
 from .streamasync import StreamAsync
-from .embedmenu import EmbedMenu
+from .embedfieldmenu import EmbedFieldMenu
 from .langtoflag import LangToFlag
 import asyncio, re, discord, json
 
@@ -20,7 +20,7 @@ from redbot.core import Config, checks
 #todo: bug in followlist (repro: try it in a text channel without webhook)
 
 
-class Tweets(EmbedMenu):
+class Tweets():
     """Cog for displaying info from Twitter's API"""
     conf_id = 800858686
     default_global = {
@@ -42,7 +42,6 @@ class Tweets(EmbedMenu):
         }
 
     def __init__(self, bot):
-        super().__init__(bot)
         self.bot = bot
         self.config = Config.get_conf(self, self.conf_id)
         self.config.register_global(**self.default_global)
@@ -50,6 +49,7 @@ class Tweets(EmbedMenu):
         self.client = None
         self.stream = None
         self.ltf = LangToFlag()
+        self.fieldmenu = EmbedFieldMenu(self.bot)
         loop = asyncio.get_event_loop()
         loop.create_task(self.checkcreds(ctx=None))
 
@@ -184,7 +184,7 @@ class Tweets(EmbedMenu):
         embed = discord.Embed(description='This channel tracks the following twitter users:',
                               colour=discord.Colour(value=0x00ff00))
         embed.set_author(icon_url=ctx.author.avatar_url_as(), name=ctx.message.author.name)
-        await self.embed_menu(ctx=ctx, field_list=field_list, start_at=0, embed=embed)
+        await self.fieldmenu.field_menu(ctx=ctx, field_list=field_list, start_at=0, embed=embed)
 
     @commands.command()
     @commands.bot_has_permissions(send_messages=True)
