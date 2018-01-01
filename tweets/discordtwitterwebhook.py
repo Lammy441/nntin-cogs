@@ -22,6 +22,7 @@ class StdOutListener(StreamListener):
         try:
             return self.on_status_(status)
         except:
+            print('There was an unknown error.')
             return True
 
     def on_status_(self, status):

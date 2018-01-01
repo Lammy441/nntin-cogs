@@ -3,6 +3,7 @@ from time import gmtime, strftime
 from datetime import datetime
 from .discordtwitterwebhook import StdOutListener
 from .streamasync import StreamAsync
+from .embedmenu import EmbedMenu
 import asyncio, re, discord
 
 try:
@@ -15,8 +16,10 @@ except:
 from redbot.core import Config, checks
 
 #todo:limit commands (e.g. follow only in text channels)
+#todo: bug in followlist (repro: try it in a text channel without webhook)
 
-class Tweets():
+
+class Tweets(EmbedMenu):
     """Cog for displaying info from Twitter's API"""
     conf_id = 800858686
     default_global = {
@@ -38,6 +41,7 @@ class Tweets():
         }
 
     def __init__(self, bot):
+        super().__init__(bot)
         self.bot = bot
         self.config = Config.get_conf(self, self.conf_id)
         self.config.register_global(**self.default_global)
@@ -47,7 +51,8 @@ class Tweets():
         loop = asyncio.get_event_loop()
         loop.create_task(self.checkcreds(ctx=None))
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __unload(self):
+        #ending stream so the stream.filter() Thread can properly close on his own.
         if self.stream:
             self.stream.disconnect()
 
@@ -165,10 +170,18 @@ class Tweets():
     @checks.is_owner()
     async def getfollow(self, ctx):
         """Get all Twitter IDs that are being followed in this text channel"""
-        #todo: check if character count > 2000
+        field_list = []
         channel_group = self.config.channel(ctx.channel)
         async with channel_group.twitter_ids() as twitter_ids:
-            await ctx.send(twitter_ids)
+            for twitter_id in twitter_ids:
+                add = str(twitter_id)
+                field_list.append({'name': add, 'value': add, 'inline': True})
+
+        embed = discord.Embed(description='This channel tracks the following twitter users:',
+                              colour=discord.Colour(value=0x00ff00))
+        embed.set_author(icon_url=ctx.author.avatar_url_as(), name=ctx.message.author.name)
+
+        await self.embed_menu(ctx=ctx, field_list=field_list, start_at=0, embed=embed)
 
     @commands.command()
     @commands.bot_has_permissions(send_messages=True)
@@ -203,15 +216,6 @@ class Tweets():
             await ctx.send('Deleted {} twitter ids.'.format(len(twitter_ids)))
             twitter_ids.clear()
 
-    @commands.command()
-    @commands.bot_has_permissions(send_messages=True)
-    @checks.is_owner()
-    async def test(self, ctx, createNew=True):
-        async with self.config.Discord() as Discord:
-            print(Discord)
-        channel_group = self.config.channel(ctx.channel)
-        async with channel_group.twitter_ids() as webhook_urls:
-            await ctx.send(len(webhook_urls))
 
     @commands.command()
     @commands.bot_has_permissions(send_messages=True)
@@ -226,14 +230,20 @@ class Tweets():
     async def disconnect(self, ctx):
         """Disconnects the twitter stream"""
         if self.stream:
+            await ctx.send('Calling disconnect')
             self.stream.disconnect()
             self.stream = None
-        await ctx.send('Disconnecting the stream')
+        else:
+            await ctx.send('Disconnect could not be called.')
 
     @commands.command()
     @commands.bot_has_permissions(send_messages=True)
     @checks.is_owner()
     async def build(self, ctx):
+
+        if self.stream:
+            self.stream.disconnect()
+
         await ctx.send('building')
         await ctx.trigger_typing()
 
@@ -257,8 +267,6 @@ class Tweets():
 
             await ctx.send('You are currently tracking {} twitter users'.format(len(twitter_ids)))
 
-
-
         async with self.config.Discord() as Discord:
             l = StdOutListener(dataD=Discord)
         async with self.config.Twitter() as Twitter:
@@ -271,11 +279,7 @@ class Tweets():
         async with self.config.twitter_ids() as twitter_ids:
             self.stream.filter(follow=twitter_ids)
 
-        print('\n\n\nHey it worked!')
-        await ctx.send('Hey it worked!')
-
-
-
+        await ctx.send('Twitter stream is now active!')
 
 
     async def checkwh(self, ctx, createNew):
@@ -315,12 +319,3 @@ class Tweets():
         else:
             if ctx:
                 await ctx.send('Twitter credentials are valid.')
-
-
-    async def handle_exception(self):
-        while self is self.bot.get_cog("Tweets"):
-            try:
-                await asyncio.sleep(10)
-            except:
-                print(strftime("[%Y-%m-%d %H:%M:%S]", gmtime()), " Exception consumed in tweets")
-                await asyncio.sleep(10)
