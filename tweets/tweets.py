@@ -103,6 +103,9 @@ class Tweets():
         [p]followlist https://twitter.com/rokxx/lists/dota-2"""
 
         channel_group = self.config.channel(ctx.channel)
+        # weird bug where default keys are not generated so I have to do it.
+        if "twitter_ids" not in (await channel_group()).keys():
+            await channel_group.twitter_ids.set([])
 
 
         if self.client == None:
@@ -123,10 +126,10 @@ class Tweets():
         added = []
         alreadyadded = []
 
-        async with channel_group.twitter_ids() as twitter_ids:
+        async with channel_group.twitter_ids() as twitter_ids_config:
             for twitterid in twitterids:
-                if twitterid not in twitter_ids:
-                    twitter_ids.append(twitterid)
+                if twitterid not in twitter_ids_config:
+                    twitter_ids_config.append(twitterid)
                     added.append(twitterid)
                 else:
                     alreadyadded.append(twitterid)
@@ -149,6 +152,9 @@ class Tweets():
         [p]follow 3065618342"""
 
         channel_group = self.config.channel(ctx.channel)
+        # weird bug where default keys are not generated so I have to do it.
+        if "twitter_ids" not in (await channel_group()).keys():
+            await channel_group.twitter_ids.set([])
 
 
         if self.client == None:
@@ -181,10 +187,10 @@ class Tweets():
         else:
             await ctx.send('None of the Twitter IDs were valid.')
 
-        async with channel_group.twitter_ids() as twitter_ids:
+        async with channel_group.twitter_ids() as twitter_ids_config:
             for validtwitterid in validtwitterids:
-                if validtwitterid not in twitter_ids:
-                    twitter_ids.append(validtwitterid)
+                if validtwitterid not in twitter_ids_config:
+                    twitter_ids_config.append(validtwitterid)
 
 
     @commands.command()
@@ -193,6 +199,9 @@ class Tweets():
     async def getfollow(self, ctx):
         """Displays the followed Twitter users in this channel."""
         channel_group = self.config.channel(ctx.channel)
+        # weird bug where default keys are not generated so I have to do it.
+        if "twitter_ids" not in (await channel_group()).keys():
+            await channel_group.twitter_ids.set([])
 
         await ctx.trigger_typing()
 
@@ -215,6 +224,10 @@ class Tweets():
     @checks.is_owner()
     async def unfollow(self, ctx, twitter_ids):
         """Unfollow Twitter IDs"""
+        channel_group = self.config.channel(ctx.channel)
+        # weird bug where default keys are not generated so I have to do it.
+        if "twitter_ids" not in (await channel_group()).keys():
+            await channel_group.twitter_ids.set([])
         pattern = '((?P<id>\d+)( |,|)+)'
         twitterids = []
         for m in re.finditer(pattern, ctx.message.content):
@@ -222,7 +235,7 @@ class Tweets():
 
         removed = []
         notfound = []
-        channel_group = self.config.channel(ctx.channel)
+
         async with channel_group.twitter_ids() as twitter_ids:
             for twitterid in twitterids:
                 if twitterid in twitter_ids:
@@ -239,6 +252,9 @@ class Tweets():
     async def unfollowall(self, ctx):
         """Clears the Twitter list in the channel"""
         channel_group = self.config.channel(ctx.channel)
+        # weird bug where default keys are not generated so I have to do it.
+        if "twitter_ids" not in (await channel_group()).keys():
+            await channel_group.twitter_ids.set([])
         async with channel_group.twitter_ids() as twitter_ids:
             await ctx.send('Twitter List was cleared on this channel. RIP {} Twitter users.'.format(len(twitter_ids)))
             twitter_ids.clear()
@@ -255,7 +271,9 @@ class Tweets():
         #        async with channel_group() as channel_config:
         #            channel_config.clear()
 
-        await self.config.clear_all()
+        #await self.config.clear_all()
+        await self.config.clear_all_channels()
+        await ctx.send('cleared')
 
     @commands.command()
     @commands.bot_has_permissions(send_messages=True)
@@ -263,6 +281,9 @@ class Tweets():
     async def getcount(self, ctx):
         """gets # followed twitter user"""
         channel_group = self.config.channel(ctx.channel)
+        # weird bug where default keys are not generated so I have to do it.
+        if "twitter_ids" not in (await channel_group()).keys():
+            await channel_group.twitter_ids.set([])
         async with channel_group.twitter_ids() as twitter_ids:
             await ctx.send(len(twitter_ids))
 
@@ -364,6 +385,9 @@ class Tweets():
 
     async def checkwh(self, ctx, createNew):
         channel_group = self.config.channel(ctx.channel)
+        # weird bug where default keys are not generated so I have to do it.
+        if "webhook_urls" not in (await channel_group()).keys():
+            await channel_group.webhook_urls.set([])
 
         async with channel_group.webhook_urls() as webhook_urls:
             if not webhook_urls:
