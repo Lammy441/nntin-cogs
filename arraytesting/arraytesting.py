@@ -16,12 +16,7 @@ class Arraytesting:
         """adds an id to the config"""
         channel_group = self.config.channel(ctx.channel)
         async with channel_group.ids() as ids:
-            #I know this syntax is really weird. But I can reproduce the bug only with this syntax.
-            print(ids)
-            for id in [id]:
-                if id not in ids:
-                    ids.append(id)
-            #ids.append(id) #<-- this causes no bug but logically it should have the exact same effect
+            ids.append(id)
         await ctx.send("ID has been added!")
 
     @commands.command()
