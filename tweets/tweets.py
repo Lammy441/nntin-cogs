@@ -18,6 +18,7 @@ from redbot.core import Config, checks
 
 #todo:limit commands (e.g. follow only in text channels)
 #todo: bug in followlist (repro: try it in a text channel without webhook)
+#todo: fix bug. exact same channel_config exist in multiple channels, cause is somewhere in follow command
 
 
 class Tweets():
@@ -50,6 +51,7 @@ class Tweets():
         self.stream = None
         self.ltf = LangToFlag()
         self.fieldmenu = EmbedFieldMenu(self.bot)
+        self.isbuilding = False
         loop = asyncio.get_event_loop()
         loop.create_task(self.checkcreds(ctx=None))
 
@@ -243,19 +245,21 @@ class Tweets():
     @commands.bot_has_permissions(send_messages=True)
     @checks.is_owner()
     async def build(self, ctx):
+        """"""
+
+        if self.isbuilding:
+            await ctx.send('It is already building.')
+            return
+        self.isbuilding = True
 
         if self.stream:
             self.stream.disconnect()
-
         await ctx.send('building')
         await ctx.trigger_typing()
 
         async with self.config.twitter_ids() as twitter_ids:
             async with self.config.Discord() as Discord:
                 Discord.clear()
-
-
-                #todo: fix bug. it's the exact same channel_config multiple times
                 for guild in self.bot.guilds:   #go through every server
                     for channel in guild.channels:  #go through every text channel
                         channel_group = self.config.channel(channel)
@@ -281,6 +285,8 @@ class Tweets():
 
         async with self.config.twitter_ids() as twitter_ids:
             self.stream.filter(follow=twitter_ids)
+
+        self.isbuilding = False
 
         await ctx.send('Twitter stream is now active!')
 
