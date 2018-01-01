@@ -17,11 +17,6 @@ except:
 
 from redbot.core import Config, checks
 
-#todo:limit commands (e.g. follow only in text channels)
-#todo: bug in followlist (repro: try it in a text channel without webhook)
-#todo: fix bug. exact same channel_config exist in multiple channels, cause is somewhere in follow command
-
-
 class Tweets():
     """Cog for displaying info from Twitter's API"""
     conf_id = 800858686
@@ -95,8 +90,7 @@ class Tweets():
         await self.checkcreds(message)
 
     @commands.command()
-    @commands.bot_has_permissions(send_messages=True)
-    @checks.is_owner()
+    @commands.bot_has_permissions(manage_webhooks=True)
     async def followlist(self, ctx, userIDs):
         """Subscribe to a Twitter List
         Example:
@@ -144,8 +138,7 @@ class Tweets():
             await self.fieldmenu.field_menu(ctx=ctx, field_list=field_list, start_at=0, embed=embed, autodelete=True)
 
     @commands.command()
-    @commands.bot_has_permissions(send_messages=True)
-    @checks.is_owner()
+    @commands.bot_has_permissions(manage_webhooks=True)
     async def follow(self, ctx, userIDs):
         """Follows a Twitter user. Get the Twitter ID from http://gettwitterid.com
         Example:
@@ -194,8 +187,7 @@ class Tweets():
 
 
     @commands.command()
-    @commands.bot_has_permissions(send_messages=True)
-    @checks.is_owner()
+    @commands.bot_has_permissions(manage_webhooks=True)
     async def getfollow(self, ctx):
         """Displays the followed Twitter users in this channel."""
         channel_group = self.config.channel(ctx.channel)
@@ -220,8 +212,7 @@ class Tweets():
             await ctx.send('You are not following anyone in this channel.')
 
     @commands.command()
-    @commands.bot_has_permissions(send_messages=True)
-    @checks.is_owner()
+    @commands.bot_has_permissions(manage_webhooks=True)
     async def unfollow(self, ctx, twitter_ids):
         """Unfollow Twitter IDs"""
         channel_group = self.config.channel(ctx.channel)
@@ -247,8 +238,7 @@ class Tweets():
         await ctx.send('removed: {}, not found: {}'.format(removed, notfound))
 
     @commands.command()
-    @commands.bot_has_permissions(send_messages=True)
-    @checks.is_owner()
+    @commands.bot_has_permissions(manage_webhooks=True)
     async def unfollowall(self, ctx):
         """Clears the Twitter list in the channel"""
         channel_group = self.config.channel(ctx.channel)
@@ -289,10 +279,9 @@ class Tweets():
 
 
     @commands.command()
-    @commands.bot_has_permissions(send_messages=True)
-    @checks.is_owner()
+    @commands.bot_has_permissions(manage_webhooks=True)
     async def createwh(self, ctx, createNew=True):
-        """Creates a webhook for the text channel if it doesn't exist"""
+        """Creates a webhook for the text channel"""
         await self.checkwh(ctx, createNew=True)
 
     @commands.command()
