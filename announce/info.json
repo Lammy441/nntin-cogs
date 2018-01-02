@@ -1,8 +1,0 @@
-{
-    "AUTHOR" : "Linley#8686",
-    "DESCRIPTION" : "Hardcoded announcement",
-    "SHORT" : "announcing",
-    "DISABLED" : false,
-    "NAME" : "Announce",
-    "TAGS" : ["private", "test"]
-}
