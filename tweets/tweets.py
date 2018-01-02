@@ -17,6 +17,9 @@ except:
 
 from redbot.core import Config, checks
 
+#todo: config for owner, allow/disallow bot to be used by others
+#todo: set webhook avatar as owner avatar
+
 class Tweets():
     """Cog for displaying info from Twitter's API"""
     conf_id = 800858686
