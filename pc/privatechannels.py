@@ -9,13 +9,14 @@ import re
 from redbot.core import Config, checks
 
 #todo: allow "admin" of the voice and text channel to set limit of users who can join
-#todo: allow "admin" to change the permission of the text channel (e.g. reading permission, comment permission)
+#todo: allow "admin" to change the permission of the text channel (e.g. read, send, connect, ... permission)
 #todo: allow admin to give role
 #todo: remove debug messages and unnecessary code
 #todo: implement logs in text channel
 #todo: implement message: requires manage role and manage channel permission.
 #todo: priority low: implement a garbage collector that runs perodically, that deletes too many
 #todo: empty voice channels, roles and text channels.
+#todo: priority low: give a user a timeout from the dynamic voice channels for switching too often
 
 class PrivateChannels:
     default_channel = {
@@ -80,14 +81,17 @@ class PrivateChannels:
         await self.state_change(member, before, after)
 
         # ensuring that the method is runned only one at a time
+        # todo: this is wrong! you are passing variables into the queue. It calculates the whole function before
+        # todo: you need to the function to the queue and call it at a later date.
         if before.channel != after.channel:
-            await self.q.put(await self.check_voice_channel(before.channel, member))
-            await self.q.put(await self.check_voice_channel( after.channel, member))
+            await self.q.put(self.check_voice_channel(before.channel, member))
+            await self.q.put(self.check_voice_channel( after.channel, member))
 
     async def workqueue(self):
         while True:
             try:
-                await self.q.get()
+                awaitThis = await self.q.get()
+                await awaitThis
             except:
                 print("Error")
 
@@ -143,7 +147,11 @@ class PrivateChannels:
             await channel_group.role.set(None)
 
             #delete voice channel
-            await channel.delete()
+            if channel:
+                try:
+                    await channel.delete()
+                except:
+                    pass
 
         else:
             if len(channel.members) == 1:
