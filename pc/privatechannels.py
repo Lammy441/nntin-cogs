@@ -14,10 +14,8 @@ from redbot.core import Config, checks
 #todo: remove debug messages and unnecessary code
 #todo: implement logs in text channel
 #todo: implement message: requires manage role and manage channel permission.
-#todo: there is some error when leaving/joining too quick
-#todo: make cog run "single threaded". (There are too many race conditions.
-#todo: Methods need to run fully before the next method starts. wait_until_ready()
-#todo: or implement a "garbage collector" that checks everything periodically
+#todo: priority low: implement a garbage collector that runs perodically, that deletes too many
+#todo: empty voice channels, roles and text channels.
 
 class PrivateChannels:
     default_channel = {
@@ -52,6 +50,7 @@ class PrivateChannels:
         self.config = Config.get_conf(self, self.conf_id)
         self.config.register_channel(**self.default_channel)
         self.config.register_guild(**self.default_guild)
+        self.q = Queue()
 
     @commands.command()
     async def type(self, ctx):
@@ -80,11 +79,17 @@ class PrivateChannels:
 
         await self.state_change(member, before, after)
 
-        #todo: put this into a Queue
+        # ensuring that the method is runned only one at a time
         if before.channel != after.channel:
-            await self.check_voice_channel(before.channel, member)
-            await self.check_voice_channel( after.channel, member)
+            await self.q.put(await self.check_voice_channel(before.channel, member))
+            await self.q.put(await self.check_voice_channel( after.channel, member))
 
+    async def workqueue(self):
+        while True:
+            try:
+                await self.q.get()
+            except:
+                print("Error")
 
     async def state_change(self, member:Member, before:VoiceState, after:VoiceState):
         if before.deaf != after.deaf:
