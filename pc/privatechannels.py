@@ -4,7 +4,7 @@ from time import gmtime, strftime
 from datetime import datetime
 from discord.member import VoiceState
 from discord.channel import VoiceChannel
-from discord import Member
+from discord import Member, PermissionOverwrite
 
 from redbot.core import Config, checks
 
@@ -12,9 +12,8 @@ from redbot.core import Config, checks
 #todo: automatically delete empty voice channels, except 1
 #todo: allow "admin" of the voice and text channel to set limit of users who can join
 #todo: allow "admin" to change the permission of the text channel (e.g. reading permission, comment permission)
-#todo: text channel default: no reading rights, role permission default: reading rights
-#todo: implement role. Only users who are in the voice channel gain a role.
 #todo: create a list of default names
+#todo: allow admin to give role
 
 class PrivateChannels:
     default_channel = {
@@ -63,8 +62,8 @@ class PrivateChannels:
         await self.state_change(member, before, after)
 
         if before.channel != after.channel:
-            await self.check_voice_channel(before.channel)
-            await self.check_voice_channel( after.channel)
+            await self.check_voice_channel(before.channel, member)
+            await self.check_voice_channel( after.channel, member)
 
 
     async def state_change(self, member:Member, before:VoiceState, after:VoiceState):
@@ -87,7 +86,7 @@ class PrivateChannels:
         pass
 
 
-    async def check_voice_channel(self, channel:VoiceChannel):
+    async def check_voice_channel(self, channel:VoiceChannel, member:Member):
         # voice channel does not exist, do nothing
         if not channel:
             return
@@ -111,25 +110,60 @@ class PrivateChannels:
 
         if len(channel.members) == 0:
             #restore default config, destroy text channel, destroy role
+            #reset admin
             await channel_group.admin.set(None)
 
+            #reset channel
             text_channel = self.bot.get_channel(id=await channel_group.textchannel())
-            await text_channel.delete()
             await channel_group.textchannel.set(None)
+            if text_channel:
+                await text_channel.delete()
+
+            #reset role
+            role_id = await channel_group.role()
+            for role in channel.guild.roles:
+                if role.id == role_id:
+                    await role.delete()
+            await channel_group.role.set(None)
 
         else:
             if len(channel.members) == 1:
-                #set admin of the channel, create text channel, create role
-                await channel_group.admin.set(channel.members[0].id)
-                
-                category_id = await guild_group.dynamiccategory()
-                category = self.bot.get_channel(id = category_id)
-                text_channel = await channel.guild.create_text_channel(name=re.sub(r'\W+', '', channel.name), category=category)
-                await channel_group.textchannel.set(text_channel.id)
+                #check if there is already an admin
+                if not await channel_group.admin():
+                    #set admin
+                    await channel_group.admin.set(channel.members[0].id)
 
+                    #create text channel
+                    overwrites = {
+                        channel.guild.default_role: PermissionOverwrite(read_messages=False),
+                        channel.guild.me: PermissionOverwrite(read_messages=True)
+                    }
+                    category_id = await guild_group.dynamiccategory()
+                    category = self.bot.get_channel(id = category_id)
+                    text_channel = await channel.guild.create_text_channel(name=re.sub(r'\W+', '', channel.name),
+                                                                           category=category, overwrites=overwrites)
 
-            #set role for every user
-            pass
+                    await channel_group.textchannel.set(text_channel.id)
+
+                    #create role
+                    role = await channel.guild.create_role(name=re.sub(r'\W+', '', channel.name),
+                                                           mentionable=True)
+                    await channel_group.role.set(role.id)
+
+                    #set role permission
+                    overwrite = PermissionOverwrite()
+                    overwrite.read_messages = True
+                    await text_channel.set_permissions(target=role, overwrite=overwrite)
+
+            #set/take role from members
+            role_id = await channel_group.role()
+            for role in channel.guild.roles:
+                if role.id == role_id:
+                    if member in channel.members:
+                        await member.add_roles(role)
+                    else:
+                        #take away role
+                        await member.remove_roles(role)
 
 
 
