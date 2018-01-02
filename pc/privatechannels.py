@@ -8,11 +8,20 @@ from discord import Member
 
 from redbot.core import Config, checks
 
+#todo: automatically create voice channel, there is always 1 empty voice channel
+#todo: automatically delete empty voice channels, except 1
+#todo: allow "admin" of the voice and text channel to set limit of users who can join
+#todo: allow "admin" to change the permission of the text channel (e.g. reading permission, comment permission)
+#todo: text channel default: no reading rights, role permission default: reading rights
+#todo: implement role. Only users who are in the voice channel gain a role.
+#todo: create a list of default names
+
 class PrivateChannels:
     default_channel = {
-        "admin": None,  # first user to join an empty voice channel is admin
+        "admin": None,  # first user to join an empty voice channel is admin, he can server mute/deafen
         "textchannel": None,  # a text channel is created and linked to the voice channel
         "role": None,  # a new role is created specific for that text channel, grants reading permission
+        "logging": True,  # admin can choose to log (user join/leave, mute/deaf, ...)
     }
     default_guild = {
         "dynamiccategory": None
