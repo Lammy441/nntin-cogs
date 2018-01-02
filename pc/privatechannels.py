@@ -3,6 +3,7 @@ from discord.member import VoiceState
 from discord.channel import VoiceChannel
 from discord import Member, PermissionOverwrite
 from random import choice
+from asyncio import Queue
 import re
 
 from redbot.core import Config, checks
@@ -10,6 +11,13 @@ from redbot.core import Config, checks
 #todo: allow "admin" of the voice and text channel to set limit of users who can join
 #todo: allow "admin" to change the permission of the text channel (e.g. reading permission, comment permission)
 #todo: allow admin to give role
+#todo: remove debug messages and unnecessary code
+#todo: implement logs in text channel
+#todo: implement message: requires manage role and manage channel permission.
+#todo: there is some error when leaving/joining too quick
+#todo: make cog run "single threaded". (There are too many race conditions.
+#todo: Methods need to run fully before the next method starts. wait_until_ready()
+#todo: or implement a "garbage collector" that checks everything periodically
 
 class PrivateChannels:
     default_channel = {
@@ -22,9 +30,24 @@ class PrivateChannels:
         "dynamiccategory": None
     }
     conf_id = 800858686
+    channel_names = ['antimage', 'axe', 'bane', 'bloodseeker', 'crystal_maiden', 'drow_ranger', 'earthshaker',
+                     'juggernaut', 'mirana', 'nevermore', 'morphling', 'phantom_lancer', 'puck', 'pudge', 'razor',
+                     'sand_king', 'storm_spirit', 'sven', 'tiny', 'vengefulspirit', 'windrunner', 'zuus', 'kunkka',
+                     'lina', 'lich', 'lion', 'shadow_shaman', 'slardar', 'tidehunter', 'witch_doctor', 'riki', 'enigma',
+                     'tinker', 'sniper', 'necrolyte', 'warlock', 'beastmaster', 'queenofpain', 'venomancer',
+                     'faceless_void', 'skeleton_king', 'death_prophet', 'phantom_assassin', 'pugna', 'templar_assassin',
+                     'viper', 'luna', 'dragon_knight', 'dazzle', 'rattletrap', 'leshrac', 'furion', 'life_stealer',
+                     'dark_seer', 'clinkz', 'omniknight', 'enchantress', 'huskar', 'night_stalker', 'broodmother',
+                     'bounty_hunter', 'weaver', 'jakiro', 'batrider', 'chen', 'spectre', 'doom_bringer',
+                     'ancient_apparition', 'ursa', 'spirit_breaker', 'gyrocopter', 'alchemist', 'invoker', 'silencer',
+                     'obsidian_destroyer', 'lycan', 'brewmaster', 'shadow_demon', 'lone_druid', 'chaos_knight', 'meepo',
+                     'treant', 'ogre_magi', 'undying', 'rubick', 'disruptor', 'nyx_assassin', 'naga_siren',
+                     'keeper_of_the_light', 'wisp', 'visage', 'slark', 'medusa', 'troll_warlord', 'centaur',
+                     'magnataur', 'shredder', 'bristleback', 'tusk', 'skywrath_mage', 'abaddon', 'elder_titan',
+                     'legion_commander', 'ember_spirit', 'earth_spirit', 'terrorblade', 'phoenix', 'oracle', 'techies',
+                     'winter_wyvern', 'arc_warden', 'abyssal_underlord', 'monkey_king', 'pangolier', 'dark_willow']
 
     def __init__(self, bot):
-        self.channel_names = ['antimage', 'axe', 'bane', 'bloodseeker', 'crystal_maiden', 'drow_ranger', 'earthshaker', 'juggernaut', 'mirana', 'nevermore', 'morphling', 'phantom_lancer', 'puck', 'pudge', 'razor', 'sand_king', 'storm_spirit', 'sven', 'tiny', 'vengefulspirit', 'windrunner', 'zuus', 'kunkka', 'lina', 'lich', 'lion', 'shadow_shaman', 'slardar', 'tidehunter', 'witch_doctor', 'riki', 'enigma', 'tinker', 'sniper', 'necrolyte', 'warlock', 'beastmaster', 'queenofpain', 'venomancer', 'faceless_void', 'skeleton_king', 'death_prophet', 'phantom_assassin', 'pugna', 'templar_assassin', 'viper', 'luna', 'dragon_knight', 'dazzle', 'rattletrap', 'leshrac', 'furion', 'life_stealer', 'dark_seer', 'clinkz', 'omniknight', 'enchantress', 'huskar', 'night_stalker', 'broodmother', 'bounty_hunter', 'weaver', 'jakiro', 'batrider', 'chen', 'spectre', 'doom_bringer', 'ancient_apparition', 'ursa', 'spirit_breaker', 'gyrocopter', 'alchemist', 'invoker', 'silencer', 'obsidian_destroyer', 'lycan', 'brewmaster', 'shadow_demon', 'lone_druid', 'chaos_knight', 'meepo', 'treant', 'ogre_magi', 'undying', 'rubick', 'disruptor', 'nyx_assassin', 'naga_siren', 'keeper_of_the_light', 'wisp', 'visage', 'slark', 'medusa', 'troll_warlord', 'centaur', 'magnataur', 'shredder', 'bristleback', 'tusk', 'skywrath_mage', 'abaddon', 'elder_titan', 'legion_commander', 'ember_spirit', 'earth_spirit', 'terrorblade', 'phoenix', 'oracle', 'techies', 'winter_wyvern', 'arc_warden', 'abyssal_underlord', 'monkey_king', 'pangolier', 'dark_willow']
         self.bot = bot
         self.config = Config.get_conf(self, self.conf_id)
         self.config.register_channel(**self.default_channel)
@@ -57,6 +80,7 @@ class PrivateChannels:
 
         await self.state_change(member, before, after)
 
+        #todo: put this into a Queue
         if before.channel != after.channel:
             await self.check_voice_channel(before.channel, member)
             await self.check_voice_channel( after.channel, member)
@@ -94,15 +118,6 @@ class PrivateChannels:
             return
 
         channel_group = self.config.channel(channel)
-
-
-        #print(object)
-        #print(type(object))
-        #print([method_name for method_name in dir(object)
-        #if callable(getattr(object, method_name))])
-
-        #print(dir(object))
-
 
         if len(channel.members) == 0:
             #restore default config, destroy text channel, destroy role
@@ -156,6 +171,8 @@ class PrivateChannels:
 
                     #create new empty voice channel for other to use
                     await channel.guild.create_voice_channel(name=choice(self.channel_names), category=category)
+
+                    #announce in text channel admin
 
             #set/take role from members
             role_id = await channel_group.role()
