@@ -1,18 +1,14 @@
 from discord.ext import commands
-import asyncio, time, re, discord
-from time import gmtime, strftime
-from datetime import datetime
 from discord.member import VoiceState
 from discord.channel import VoiceChannel
 from discord import Member, PermissionOverwrite
+from random import choice
+import re
 
 from redbot.core import Config, checks
 
-#todo: automatically create voice channel, there is always 1 empty voice channel
-#todo: automatically delete empty voice channels, except 1
 #todo: allow "admin" of the voice and text channel to set limit of users who can join
 #todo: allow "admin" to change the permission of the text channel (e.g. reading permission, comment permission)
-#todo: create a list of default names
 #todo: allow admin to give role
 
 class PrivateChannels:
@@ -28,6 +24,7 @@ class PrivateChannels:
     conf_id = 800858686
 
     def __init__(self, bot):
+        self.channel_names = ['antimage', 'axe', 'bane', 'bloodseeker', 'crystal_maiden', 'drow_ranger', 'earthshaker', 'juggernaut', 'mirana', 'nevermore', 'morphling', 'phantom_lancer', 'puck', 'pudge', 'razor', 'sand_king', 'storm_spirit', 'sven', 'tiny', 'vengefulspirit', 'windrunner', 'zuus', 'kunkka', 'lina', 'lich', 'lion', 'shadow_shaman', 'slardar', 'tidehunter', 'witch_doctor', 'riki', 'enigma', 'tinker', 'sniper', 'necrolyte', 'warlock', 'beastmaster', 'queenofpain', 'venomancer', 'faceless_void', 'skeleton_king', 'death_prophet', 'phantom_assassin', 'pugna', 'templar_assassin', 'viper', 'luna', 'dragon_knight', 'dazzle', 'rattletrap', 'leshrac', 'furion', 'life_stealer', 'dark_seer', 'clinkz', 'omniknight', 'enchantress', 'huskar', 'night_stalker', 'broodmother', 'bounty_hunter', 'weaver', 'jakiro', 'batrider', 'chen', 'spectre', 'doom_bringer', 'ancient_apparition', 'ursa', 'spirit_breaker', 'gyrocopter', 'alchemist', 'invoker', 'silencer', 'obsidian_destroyer', 'lycan', 'brewmaster', 'shadow_demon', 'lone_druid', 'chaos_knight', 'meepo', 'treant', 'ogre_magi', 'undying', 'rubick', 'disruptor', 'nyx_assassin', 'naga_siren', 'keeper_of_the_light', 'wisp', 'visage', 'slark', 'medusa', 'troll_warlord', 'centaur', 'magnataur', 'shredder', 'bristleback', 'tusk', 'skywrath_mage', 'abaddon', 'elder_titan', 'legion_commander', 'ember_spirit', 'earth_spirit', 'terrorblade', 'phoenix', 'oracle', 'techies', 'winter_wyvern', 'arc_warden', 'abyssal_underlord', 'monkey_king', 'pangolier', 'dark_willow']
         self.bot = bot
         self.config = Config.get_conf(self, self.conf_id)
         self.config.register_channel(**self.default_channel)
@@ -50,8 +47,7 @@ class PrivateChannels:
     async def pcinit(self, ctx):
         category = await ctx.guild.create_category('dynamic room')
         await self.config.guild(ctx.guild).dynamiccategory.set(category.id)
-
-        print(dir(category))
+        await ctx.guild.create_voice_channel(name=choice(self.channel_names), category=category)
 
 
     async def on_voice_state_update(self, member:Member, before:VoiceState, after:VoiceState):
@@ -126,6 +122,9 @@ class PrivateChannels:
                     await role.delete()
             await channel_group.role.set(None)
 
+            #delete voice channel
+            await channel.delete()
+
         else:
             if len(channel.members) == 1:
                 #check if there is already an admin
@@ -154,6 +153,9 @@ class PrivateChannels:
                     overwrite = PermissionOverwrite()
                     overwrite.read_messages = True
                     await text_channel.set_permissions(target=role, overwrite=overwrite)
+
+                    #create new empty voice channel for other to use
+                    await channel.guild.create_voice_channel(name=choice(self.channel_names), category=category)
 
             #set/take role from members
             role_id = await channel_group.role()
