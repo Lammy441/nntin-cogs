@@ -1,7 +1,7 @@
 from discord.ext import commands
 from discord.member import VoiceState
 from discord.channel import VoiceChannel
-from discord import Member, PermissionOverwrite
+from discord import Member, PermissionOverwrite, Embed
 from random import choice
 from asyncio import Queue
 import re
@@ -12,11 +12,12 @@ from redbot.core import Config, checks
 #todo: allow "admin" to change the permission of the text channel (e.g. read, send, connect, ... permission)
 #todo: allow admin to give role
 #todo: remove debug messages and unnecessary code
-#todo: implement logs in text channel
-#todo: implement message: requires manage role and manage channel permission.
+#todo: implement warning message: requires manage role and manage channel permission.
 #todo: priority low: implement a garbage collector that runs perodically, that deletes too many
 #todo: empty voice channels, roles and text channels.
 #todo: priority low: give a user a timeout from the dynamic voice channels for switching too often
+#todo: limit the bot's commands to the dynamic text channels (implement check if fail return)
+#todo: implement channel specifc "admin" role, tie the admin check to this role
 
 class PrivateChannels:
     default_channel = {
@@ -65,7 +66,7 @@ class PrivateChannels:
         category_id = await guild_group.dynamiccategory()
         print(category_id)
 
-
+    @checks.is_owner()
     @commands.command()
     async def pcinit(self, ctx):
         category = await ctx.guild.create_category('dynamic room')
@@ -81,38 +82,61 @@ class PrivateChannels:
         await self.state_change(member, before, after)
 
         # ensuring that the method is runned only one at a time
-        # todo: this is wrong! you are passing variables into the queue. It calculates the whole function before
-        # todo: you need to the function to the queue and call it at a later date.
         if before.channel != after.channel:
-            await self.q.put(self.check_voice_channel(before.channel, member))
-            await self.q.put(self.check_voice_channel( after.channel, member))
+            await self.q.put((self.check_voice_channel(before.channel, member), before.channel))
+            await self.q.put((self.check_voice_channel( after.channel, member), after.channel))
 
     async def workqueue(self):
+        # ensuring that the method is runned only one at a time
         while True:
             try:
-                awaitThis = await self.q.get()
+                awaitThis, channel = await self.q.get()
                 await awaitThis
             except:
-                print("Error")
+                # errors happen because of some write errors
+                await self.fixchannel(channel)
+
+    async def fixchannel(self, channel:VoiceChannel):
+        print(channel)
 
     async def state_change(self, member:Member, before:VoiceState, after:VoiceState):
         if before.deaf != after.deaf:
-            await self.log_message(before.channel, 'guild deaf')
+            await self.log_message(member, after.channel, 'guild deaf' if after.deaf else 'guild undeaf')
         if before.mute != after.mute:
-            await self.log_message(before.channel, 'guild mute')
+            await self.log_message(member, after.channel, 'guild mute' if after.deaf else 'guild unmute')
         if before.self_mute != after.self_mute:
-            await self.log_message(before.channel, 'self mute')
+            await self.log_message(member, after.channel, 'self mute' if after.self_mute else 'self unmute')
         if before.self_deaf != after.self_deaf:
-            await self.log_message(before.channel, 'self dead')
+            await self.log_message(member, after.channel, 'self deaf' if after.deaf else 'self undeaf')
         if before.channel != after.channel:
-            await self.log_message(before.channel, 'channel change')
+            await self.log_message(member, before.channel, 'user left')
+            await self.log_message(member, after.channel, 'user joined')
 
-    async def log_message(self, channel:VoiceChannel, message:str):
-        #retrieve the text channel id from voice channel config
-        #retrieve the text channel object and send the message
+    async def log_message(self, member:Member, channel:VoiceChannel, message:str):
+        if not channel:
+            # can't log if channel does not exist
+            return
 
-        #print(message)
-        pass
+        channel_group = self.config.channel(channel)
+        if not await channel_group():
+            #do nothing if config doesn't exist
+            return
+
+        if not await channel_group.logging():
+            # don't log when logging is diabled
+            return
+
+        text_channel = self.bot.get_channel(id=await channel_group.textchannel())
+        if not text_channel:
+            #can't log if channel does not exist
+            return
+
+        embed = Embed(title=message, description='')
+        embed.set_author(icon_url=member.avatar_url_as(), name=member.name)
+        embed.set_footer(text='NNTin cogs', icon_url='https://i.imgur.com/6LfN4cd.png')
+
+        await text_channel.send(embed=embed)
+
 
 
     async def check_voice_channel(self, channel:VoiceChannel, member:Member):
@@ -172,6 +196,9 @@ class PrivateChannels:
 
                     await channel_group.textchannel.set(text_channel.id)
 
+                    #announce in text channel admin
+                    await text_channel.send('<@{}> controls this text channel.'.format(channel.members[0].id))
+
                     #create role
                     role = await channel.guild.create_role(name=re.sub(r'\W+', '', channel.name),
                                                            mentionable=True)
@@ -185,7 +212,6 @@ class PrivateChannels:
                     #create new empty voice channel for other to use
                     await channel.guild.create_voice_channel(name=choice(self.channel_names), category=category)
 
-                    #announce in text channel admin
 
             #set/take role from members
             role_id = await channel_group.role()
