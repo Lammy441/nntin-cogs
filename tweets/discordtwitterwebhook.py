@@ -158,6 +158,9 @@ class StdOutListener(StreamListener):
         """Called when a non-200 status code is returned"""
         print('on_error')
         print(status_code)
+        if status_code == 420:
+            print('You are being rate limited. (Possible reasons: Too many twitter ids, your bot keeps restarting (-> spamming Twitter with login requests), ???')
+            time.sleep(600)
         return #False   #if it returns False the stream will stop
 
     def on_disconnect(self, notice):
