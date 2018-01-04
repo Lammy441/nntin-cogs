@@ -24,15 +24,16 @@ class Tweets():
     """Cog for displaying info from Twitter's API"""
     conf_id = 800858686
     default_global = {
-                "Twitter": {
-                    "consumer_key": "",
-                    "consumer_secret": "",
-                    "access_token": "",
-                    "access_token_secret": ""
-                },
-                "Discord": [],
-                "twitter_ids": []
-            }
+            "Twitter": {
+                "consumer_key": "",
+                "consumer_secret": "",
+                "access_token": "",
+                "access_token_secret": ""
+            },
+            "Discord": [],
+            "twitter_ids": [],
+            "autorestart": False    #todo: set to True in build, set to False in disconnect, write function
+        }
     default_channel = {
             "IncludeReplyToUser" : True,
             "IncludeRetweet" : True,
@@ -51,8 +52,11 @@ class Tweets():
         self.ltf = LangToFlag()
         self.fieldmenu = EmbedFieldMenu(self.bot)
         self.isbuilding = False
-        loop = asyncio.get_event_loop()
-        loop.create_task(self.checkcreds(message=None))
+        loop_checkcreds = asyncio.get_event_loop()
+        loop_checkcreds.create_task(self.checkcreds(message=None))
+
+        loop_checkautorestart = asyncio.get_event_loop()
+        loop_checkautorestart.create_task(self.checkautorestart())
 
     def __unload(self):
         """ending stream so the stream.filter() Thread can properly close on his own."""
@@ -292,6 +296,7 @@ class Tweets():
     @checks.is_owner()
     async def disconnect(self, ctx):
         """Disconnects the twitter stream"""
+        await self.config.autorestart.set(False)
         if self.stream:
             await ctx.send('Calling disconnect')
             self.stream.disconnect()
@@ -304,16 +309,26 @@ class Tweets():
     @checks.is_owner()
     async def build(self, ctx):
         """Builds and starts the twitter stream. This may take a while."""
+        await self.config.autorestart.set(True)
+        await self.build_(ctx)
 
+    async def checkautorestart(self):
+        if await self.config.autorestart():
+            await self.build_()
+
+    async def build_(self, ctx=None):
         if self.isbuilding:
-            await ctx.send('It is already building.')
+            if ctx:
+                await ctx.send('It is already building.')
             return
         self.isbuilding = True
 
         if self.stream:
             self.stream.disconnect()
-        await ctx.send('building')
-        await ctx.trigger_typing()
+
+        if ctx:
+            await ctx.send('building')
+            await ctx.trigger_typing()
 
         async with self.config.twitter_ids() as twitter_ids:
             twitter_ids.clear()
@@ -330,8 +345,8 @@ class Tweets():
                 for twitter_id in instance['twitter_ids']:
                     if twitter_id not in twitter_ids:
                         twitter_ids.append(twitter_id)
-
-            await ctx.send('You are currently tracking {} twitter users'.format(len(twitter_ids)))
+            if ctx:
+                await ctx.send('You are currently tracking {} twitter users'.format(len(twitter_ids)))
 
         async with self.config.Discord() as Discord:
             l = StdOutListener(dataD=Discord)
@@ -348,7 +363,8 @@ class Tweets():
 
         self.isbuilding = False
 
-        await ctx.send('Twitter stream is now active!')
+        if ctx:
+            await ctx.send('Twitter stream is now active!')
 
     async def twitter_ids_in_field(self, twitter_ids):
         field_list = []
