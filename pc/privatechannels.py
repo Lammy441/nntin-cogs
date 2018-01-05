@@ -1,7 +1,7 @@
 from discord.ext import commands
 from discord.member import VoiceState
 from discord.channel import VoiceChannel
-from discord import Member, PermissionOverwrite, Embed
+from discord import Member, PermissionOverwrite, Embed, Client
 from random import choice
 from asyncio import Queue
 import re
@@ -18,10 +18,12 @@ from redbot.core import Config, checks
 #todo: priority low: give a user a timeout from the dynamic voice channels for switching too often
 #todo: limit the bot's commands to the dynamic text channels (implement check if fail return)
 #todo: implement channel specifc "admin" role, tie the admin check to this role
+#todo: create text channel config -> point to voice channel config
 
 class PrivateChannels:
     default_channel = {
         "admin": None,  # first user to join an empty voice channel is admin, he can server mute/deafen
+        "adminrole": None, #todo: not implemented
         "textchannel": None,  # a text channel is created and linked to the voice channel
         "role": None,  # a new role is created specific for that text channel, grants reading permission
         "logging": True,  # admin can choose to log (user join/leave, mute/deaf, ...)
@@ -47,7 +49,7 @@ class PrivateChannels:
                      'legion_commander', 'ember_spirit', 'earth_spirit', 'terrorblade', 'phoenix', 'oracle', 'techies',
                      'winter_wyvern', 'arc_warden', 'abyssal_underlord', 'monkey_king', 'pangolier', 'dark_willow']
 
-    def __init__(self, bot):
+    def __init__(self, bot:Client):
         self.bot = bot
         self.config = Config.get_conf(self, self.conf_id)
         self.config.register_channel(**self.default_channel)
@@ -89,14 +91,18 @@ class PrivateChannels:
     async def workqueue(self):
         # ensuring that the method is runned only one at a time
         while True:
-            try:
-                awaitThis, channel = await self.q.get()
-                await awaitThis
-            except:
-                # errors happen because of some write errors
-                await self.fixchannel(channel)
+            #try:
+            awaitThis, channel = await self.q.get()
+            await awaitThis
+            #except:
+            #    # errors happen because of some write permission errors
+            #    # todo: put this in try except
+            #    await self.fixchannel(channel)
 
     async def fixchannel(self, channel:VoiceChannel):
+        #go through all voice channel from guild undere category
+        #do the same with text channel
+        #check roles (how??)
         print(channel)
 
     async def state_change(self, member:Member, before:VoiceState, after:VoiceState):
