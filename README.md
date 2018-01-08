@@ -26,6 +26,9 @@ Discord bot commands:
 [p]cog install nntincogs tweets
 [p]cog install nntincogs remindme
 [p]cog install nntincogs pc
+[p]load tweets
+[p]load remindme
+[p]load pc
 ```
 
 alternatively:  
