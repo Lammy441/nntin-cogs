@@ -5,6 +5,11 @@ from datetime import datetime
 
 from redbot.core import Config, checks
 
+
+#todo: rewrite; check_reminders() is consuming too much CPU. It cycles through all users
+# todo: Create a json and work from that single json.
+
+
 class RemindMe:
     """Never forget anything anymore."""
     default_user = {
