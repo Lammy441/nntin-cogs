@@ -24,6 +24,14 @@ class RemindMe:
         self.config.register_user(**self.default_user)
         self.bot.loop.create_task(self.handle_exception())
 
+    @checks.is_owner()
+    @commands.command()
+    async def clearreminders(self, ctx):
+        """Owner only. Drops all reminders - including reminders from other users."""
+        await ctx.trigger_typing()
+        await self.config.clear_all_users()
+        await ctx.send('Dropped all reminders.')
+
     @commands.command()
     @commands.bot_has_permissions(send_messages=True)
     async def remindme(self, ctx, hms: str, text: str):
