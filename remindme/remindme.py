@@ -2,12 +2,8 @@ from discord.ext import commands
 import asyncio, time, re, discord
 from time import gmtime, strftime
 from datetime import datetime
-
 from redbot.core import Config, checks
-
-
-#todo: rewrite; check_reminders() is consuming too much CPU. It cycles through all users
-# todo: Create a json and work from that single json.
+from discord import Client
 
 
 class RemindMe:
@@ -15,17 +11,18 @@ class RemindMe:
     default_user = {
         "reminders": []
     }
-    #default_reminder is not used. It merely shows you the structure.
+    # default_reminder is not used. It merely shows you the structure.
     default_reminder = {
         'FUTURE': None,
         'TEXT': None
     }
     conf_id = 800858686
 
-    def __init__(self, bot):
+    def __init__(self, bot:Client):
         self.bot = bot
         self.config = Config.get_conf(self, self.conf_id)
         self.config.register_user(**self.default_user)
+        self.bot.loop.create_task(self.handle_exception())
 
     @commands.command()
     @commands.bot_has_permissions(send_messages=True)
@@ -40,16 +37,16 @@ class RemindMe:
         hours, minutes, seconds = m.group('hours'), m.group('minutes'), m.group('seconds')
         if hours == None: hours = 0
         if minutes == None: minutes = 0
-        totalSeconds = int(hours) * 3600 + int(minutes) * 60 + int(seconds)
+        total_seconds = int(hours) * 3600 + int(minutes) * 60 + int(seconds)
 
-        if totalSeconds < 1:
+        if total_seconds < 1:
             await ctx.send("Quantity must not be 0 or negative.")
             return
         if len(reason) > 1960:
             await ctx.send("Text is too long.")
             return
 
-        future = int(time.time()+totalSeconds)
+        future = int(time.time()+total_seconds)
         reminder = {
             'FUTURE': future,
             'TEXT': reason
@@ -58,7 +55,7 @@ class RemindMe:
         async with user_group.reminders() as reminders:
             reminders.append(reminder)
 
-        m, s = divmod(totalSeconds, 60)
+        m, s = divmod(total_seconds, 60)
         h, m = divmod(m, 60)
 
         embed = discord.Embed(title='⏰ Private messaging in %d:%02d:%02d' % (h, m, s), description=reason)
@@ -66,7 +63,7 @@ class RemindMe:
         embed.set_footer(text='I will remind you on', icon_url='https://i.imgur.com/6LfN4cd.png')
         embed.timestamp = datetime.utcfromtimestamp(future)
 
-        #todo: implement warning if bot has no permission to direct message user
+        # todo: implement warning if bot has no permission to direct message user
 
         await ctx.send(content=None, embed=embed)
 
@@ -92,7 +89,7 @@ class RemindMe:
         """Show all your reminders."""
         await ctx.trigger_typing()
         user_group = self.config.user(ctx.author)
-        reminderEmpty = True
+        reminder_empty = True
         embed = discord.Embed()
         embed.set_author(icon_url=ctx.author.avatar_url_as(), name=ctx.message.author.name)
         embed.set_footer(text='This message was created on', icon_url='https://i.imgur.com/6LfN4cd.png')
@@ -100,41 +97,49 @@ class RemindMe:
 
         async with user_group.reminders() as reminders:
             for reminder in reminders:
-                reminderEmpty = False
-                timedelta = datetime.utcfromtimestamp(reminder["FUTURE"]) - datetime.utcnow()
-                totalSeconds = timedelta.total_seconds()
-                m, s = divmod(totalSeconds, 60)
+                reminder_empty = False
+                time_delta = datetime.utcfromtimestamp(reminder["FUTURE"]) - datetime.utcnow()
+                total_seconds = time_delta.total_seconds()
+                m, s = divmod(total_seconds, 60)
                 h, m = divmod(m, 60)
                 text = '⏰ Reminder in %d:%02d:%02d' % (h, m, s)
                 embed.add_field(name=text, value=reminder["TEXT"], inline=False)
-        if reminderEmpty:
+        if reminder_empty:
             embed.add_field(name="Error", value="You don't have any reminders")
         await ctx.send(content=None, embed=embed)
 
     async def check_reminders(self):
-        while self is self.bot.get_cog("RemindMe"):
-            users = self.bot.users
-            for user in users:
-                user_group = self.config.user(user)
-                async with user_group.reminders() as reminders:
-                    removeThese = []
-                    for reminder in reminders:
-                        if reminder["FUTURE"] <= int(time.time()):
-                            removeThese.append(reminder)    #removing an element from an array while iterating over an array is a bad idea
-                            embed = discord.Embed(title='⏰ Reminder',
-                                                  description=reminder["TEXT"])
-                            embed.set_author(icon_url=user.avatar_url_as(), name=user.name)
-                            embed.set_footer(text='NNTin cogs', icon_url='https://i.imgur.com/6LfN4cd.png')
-                            await user.send(content=None, embed=embed)
-                    for removeThis in removeThese:
-                        if removeThis in reminders:
-                            reminders.remove(removeThis)
-            await asyncio.sleep(5)
+        reminders_dict = await self.config.all_users()
+        remove_user_ids = []
+        for user_id, value in reminders_dict.items():
+            remove_reminders = []
+            reminders = value['reminders']
+            for reminder in reminders:
+                if reminder["FUTURE"] <= int(time.time()):
+                    user = self.bot.get_user(user_id)
+
+                    remove_reminders.append(reminder)
+                    embed = discord.Embed(title='⏰ Reminder',
+                                          description=reminder["TEXT"])
+                    embed.set_author(icon_url=user.avatar_url_as(), name=user.name)
+                    embed.set_footer(text='NNTin cogs', icon_url='https://i.imgur.com/6LfN4cd.png')
+                    await user.send(content=None, embed=embed)
+            for remove_this in remove_reminders:
+                if remove_this in reminders:
+                    reminders.remove(remove_this)
+
+            if not reminders:  # reminder list is empty
+                remove_user_ids.append(user_id)
+
+        for remove_this in remove_user_ids:
+            reminders_dict.pop(remove_this, None)   # todo: this does not remove the user, find a solution
+
+        await asyncio.sleep(5)
 
     async def handle_exception(self):
-        while self is self.bot.get_cog("RemindMe"):
+        while self is self.bot.get_cog("RemindMe"):  # I can't get __unload() to work, so I use this
             try:
                 await self.check_reminders()
             except:
-                #print(strftime("[%Y-%m-%d %H:%M:%S]", gmtime()), " Exception consumed in remindme")
-                await asyncio.sleep(10)
+                print(strftime("[%Y-%m-%d %H:%M:%S]", gmtime()), " Exception consumed in remindme")
+                await asyncio.sleep(5)
