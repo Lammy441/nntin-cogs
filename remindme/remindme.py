@@ -1,5 +1,7 @@
 from discord.ext import commands
-import asyncio, time, re, discord
+import asyncio
+import re
+import discord
 from time import gmtime, strftime
 from datetime import datetime
 from redbot.core import Config, checks
@@ -54,7 +56,8 @@ class RemindMe:
             await ctx.send("Text is too long.")
             return
 
-        future = int(time.time()+total_seconds)
+        future = datetime.utcnow().timestamp() + total_seconds
+
         reminder = {
             'FUTURE': future,
             'TEXT': reason
@@ -106,8 +109,8 @@ class RemindMe:
         async with user_group.reminders() as reminders:
             for reminder in reminders:
                 reminder_empty = False
-                time_delta = datetime.utcfromtimestamp(reminder["FUTURE"]) - datetime.utcnow()
-                total_seconds = time_delta.total_seconds()
+                time_delta = reminder["FUTURE"] - datetime.utcnow().timestamp()
+                total_seconds = int(time_delta)
                 m, s = divmod(total_seconds, 60)
                 h, m = divmod(m, 60)
                 text = '⏰ Reminder in %d:%02d:%02d' % (h, m, s)
@@ -123,7 +126,7 @@ class RemindMe:
             remove_reminders = []
             reminders = value['reminders']
             for reminder in reminders:
-                if reminder["FUTURE"] <= int(time.time()):
+                if reminder["FUTURE"] <= datetime.utcnow().timestamp():
                     user = self.bot.get_user(user_id)
 
                     remove_reminders.append(reminder)
