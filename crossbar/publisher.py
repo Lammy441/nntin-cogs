@@ -7,6 +7,7 @@ class DiscordComponent(ApplicationSession):
     def __init__(self, bot: Red, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.bot = bot
+        print(self.bot.guilds)
 
     def onConnect(self):
         self.join("realm1", ["wampcra"], "backend")
