@@ -1,8 +1,10 @@
 from redbot.core import Config, commands, checks
 from redbot.core.bot import Red
 from discord import Message, User, Member, TextChannel, GroupChannel, DMChannel, Reaction, VoiceState
-from discord.abc import Messageable
 from datetime import datetime
+from .publisher import DiscordComponent
+import asyncio
+from autobahn.asyncio.wamp import ApplicationRunner
 
 
 class Crossbar(commands.Cog):
@@ -68,6 +70,12 @@ class Crossbar(commands.Cog):
     async def c_on_voice_state_update(self, member: Member, before: VoiceState, after: VoiceState):
         if self._is_enabled:
             pass
+
+    @commands.command(name="connect")
+    async def c_connect(self, ctx):
+        runner = ApplicationRunner(url="ws://crosku.herokuapp.com/ws", realm="realm1")
+        await runner.run(make=DiscordComponent, start_loop=False)
+
 
     @commands.group(name="crossbarset")
     @checks.admin_or_permissions(manage_guilds=True)
