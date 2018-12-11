@@ -1,10 +1,10 @@
 from redbot.core import Config, commands, checks
 from redbot.core.bot import Red
-from discord import Message, User, Member, TextChannel, GroupChannel, DMChannel, Reaction, VoiceState
+from discord import Message, User, Member, TextChannel, GroupChannel, DMChannel, Reaction, VoiceState, Guild
 from datetime import datetime
 from .publisher import DiscordComponent
 from autobahn.asyncio.wamp import ApplicationRunner
-import json
+from .tojson import tojson
 
 
 class Crossbar(commands.Cog):
@@ -40,64 +40,64 @@ class Crossbar(commands.Cog):
         self._is_enabled = await self._config.enabled()
 
         def parametrized(dec):
-            def layer(*args, **kwargs):
+            def layer(*args):
                 def repl(f):
-                    return dec(f, *args, **kwargs)
+                    return dec(f, *args)
                 return repl
             return layer
 
         @parametrized
-        def crossbar_publish(f, topic: str):
-            async def evaluate(*args, **kwargs):
+        def crossbar_publish(f, _topic: str):
+            async def evaluate(*args):
+                # todo: create discord guild specific topics instead of having a global one
+                topic = "nntin.github.io.discord." + _topic
                 print(topic)
-                if self._is_enabled: # and self.comp:
-                    return await f(*args, **kwargs)
+                if self._is_enabled:  # and self.comp:
+                    payload = tojson([
+                        (arg.__class__.__name__, arg) for arg in args
+                    ])
+
+                    # print(payload)
+                    if self.comp:
+                        print("Firing payload. 2")
+                        self.comp.publish(topic=topic, payload=payload)
+                    return await f(*args)
                 else:
                     async def do_nothing():
                         pass
                     return do_nothing
             return evaluate
 
-        # Note: Using isinstance for debugging reasons. (Make IDE show available methods, attributes, ...)
+        # Note: functions below seemingly defined without logic
+        # Note: logic is in @crossbar_publish
 
         @crossbar_publish("ON_MESSAGE")
         async def c_on_message(message: Message):
-            print(message.content)
-
-            for slot in message.__slots__:
-                if not slot.startswith('_') and hasattr(message, slot):
-                    res = getattr(message, slot)
-                    print(slot, res, type(res))
+            pass
 
         @crossbar_publish("ON_TYPING")
         async def c_on_typing(channel, user, when: datetime):
-            if isinstance(channel, TextChannel) or isinstance(channel, GroupChannel) or isinstance(channel, DMChannel):
-                pass
-            if isinstance(user, User) or isinstance(user, Member):
-                pass
-            print(when)
+            pass
 
         @crossbar_publish("ON_REACTION_ADD")
         async def c_on_reaction_add(reaction: Reaction, user):
-            if isinstance(user, User) or isinstance(user, Member):
-                pass
-            print(user)
+            pass
 
         @crossbar_publish("ON_MEMBER_JOIN")
         async def c_on_member_join(member: Member):
-            print(member)
+            pass
 
         @crossbar_publish("ON_MEMBER_REMOVE")
         async def c_on_member_remove(member: Member):
-            print(member)
+            pass
 
         @crossbar_publish("ON_MEMBER_UPDATE")
         async def c_on_member_update(before: Member, after: Member):
-            print(after)
+            pass
 
         @crossbar_publish("ON_VOICE_STATE_UPDATE")
         async def c_on_voice_state_update(member: Member, before: VoiceState, after: VoiceState):
-            print(member)
+            pass
 
         self.bot.add_listener(c_on_message, "on_message")
         self.bot.add_listener(c_on_typing, "on_typing")
