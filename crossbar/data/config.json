@@ -30,22 +30,36 @@
                             ]
                         },
                         {
-                            "name": "anonymous",
+                            "name": "frontend",
                             "permissions": [
                                 {
-                                    "uri": "",
-                                    "match": "prefix",
+                                    "uri": "*",
                                     "allow": {
-                                        "call": true,
-                                        "register": true,
-                                        "publish": true,
-                                        "subscribe": true
+                                        "call": false,
+                                        "register": false,
+                                        "publish": false,
+                                        "subscribe": false
                                     },
                                     "disclose": {
                                         "caller": false,
                                         "publisher": false
                                     },
-                                    "cache": true
+                                    "cache": false
+                                },
+                                {
+                                    "uri": "nntin.github.io.discord.*",
+                                    "allow": {
+                                        "call": true,
+                                        "register": false,
+                                        "publish": false,
+                                        "subscribe": true
+                                    }
+                                },
+                                {
+                                    "uri": "wamp.subscription.get_events",
+                                    "allow": {
+                                        "call": true
+                                    }
                                 }
                             ]
                         }

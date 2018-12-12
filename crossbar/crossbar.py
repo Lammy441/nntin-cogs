@@ -2,9 +2,10 @@ from redbot.core import Config, commands, checks
 from redbot.core.bot import Red
 from discord import Message, User, Member, TextChannel, GroupChannel, DMChannel, Reaction, VoiceState, Guild
 from datetime import datetime
-from .publisher import DiscordComponent
+from .discordcomponent import DiscordComponent
 from autobahn.asyncio.wamp import ApplicationRunner
 from .tojson import tojson
+import inspect
 
 
 class Crossbar(commands.Cog):
@@ -18,7 +19,8 @@ class Crossbar(commands.Cog):
         "crossbar": {
             "URI": None,
             "user": None,
-            "secret": None
+            "secret": None,
+            "realm": None
         }
     }
 
@@ -52,14 +54,13 @@ class Crossbar(commands.Cog):
                 # todo: create discord guild specific topics instead of having a global one
                 topic = "nntin.github.io.discord." + _topic
                 print(topic)
-                if self._is_enabled:  # and self.comp:
+                if self._is_enabled:  # and self.comp:  # todo: uncomment
                     payload = tojson([
-                        (arg.__class__.__name__, arg) for arg in args
+                        (list(inspect.signature(f).parameters)[i], args[i]) for i in range(0, len(args))
                     ])
 
-                    # print(payload)
+                    #print(payload)
                     if self.comp:
-                        print("Firing payload. 2")
                         self.comp.publish(topic=topic, payload=payload)
                     return await f(*args)
                 else:
@@ -109,8 +110,12 @@ class Crossbar(commands.Cog):
 
     @commands.command(name="connect")
     async def c_connect(self, ctx):
-        self.comp = DiscordComponent(bot=self.bot)
-        runner = ApplicationRunner(url="ws://crosku.herokuapp.com/ws", realm="realm1")
+        _component_config = await self._config.crossbar()
+
+        print(_component_config)
+
+        self.comp = DiscordComponent(bot=self.bot, component_config=_component_config)
+        runner = ApplicationRunner(url=_component_config["URI"], realm=_component_config["realm"])
         await runner.run(make=self.comp, start_loop=False)
 
     @commands.group(name="crossbarset")
@@ -123,10 +128,10 @@ class Crossbar(commands.Cog):
 
     @_crossbarset.command(name="creds")
     @checks.is_owner()
-    async def _set_creds(self, ctx, crossbar_URI: str, user: str, secret: str):
+    async def _set_creds(self, ctx, crossbar_URI: str, user: str, secret: str, realm: str):
         """Configure connection to your crossbar router. (This assumes you have a crossbar router running.)"""
         # todo: test the configured crossbar connection
-        crossbar_config = {"URI": crossbar_URI, "user": user, "secret": secret}
+        crossbar_config = {"URI": crossbar_URI, "user": user, "secret": secret, "realm": realm}
         await self._config.crossbar.set(crossbar_config)
         await ctx.send("Crossbar connection configured.")
 

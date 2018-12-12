@@ -1,0 +1,9 @@
+{
+    "author": ["Linley#8686"],
+    "install_msg": "",
+    "name": "Crossbar",
+    "short": "A crossbar client written as a cog",
+    "description": "Control your Discord Bot through RPC. See what the bot sees.",
+    "tags": ["crossbar", "utility", "RPC", "PubSub"],
+    "requirements": []
+}
