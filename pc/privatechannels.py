@@ -1,4 +1,3 @@
-from discord.ext import commands
 from discord.member import VoiceState
 from discord.channel import VoiceChannel
 from discord import Member, PermissionOverwrite, Embed, Client
@@ -6,21 +5,22 @@ from random import choice
 from asyncio import Queue
 import re
 
-from redbot.core import Config, checks
+from redbot.core import Config, checks, commands
 
-#todo: allow "admin" of the voice and text channel to set limit of users who can join
-#todo: allow "admin" to change the permission of the text channel (e.g. read, send, connect, ... permission)
-#todo: allow admin to give role
-#todo: remove debug messages and unnecessary code
-#todo: implement warning message: requires manage role and manage channel permission.
-#todo: priority low: implement a garbage collector that runs perodically, that deletes too many
-#todo: empty voice channels, roles and text channels.
-#todo: priority low: give a user a timeout from the dynamic voice channels for switching too often
-#todo: limit the bot's commands to the dynamic text channels (implement check if fail return)
-#todo: implement channel specifc "admin" role, tie the admin check to this role
-#todo: create text channel config -> point to voice channel config
+# todo: allow "admin" of the voice and text channel to set limit of users who can join
+# todo: allow "admin" to change the permission of the text channel (e.g. read, send, connect, ... permission)
+# todo: allow admin to give role
+# todo: remove debug messages and unnecessary code
+# todo: implement warning message: requires manage role and manage channel permission.
+# todo: priority low: implement a garbage collector that runs perodically, that deletes too many
+# todo: empty voice channels, roles and text channels.
+# todo: priority low: give a user a timeout from the dynamic voice channels for switching too often
+# todo: limit the bot's commands to the dynamic text channels (implement check if fail return)
+# todo: implement channel specifc "admin" role, tie the admin check to this role
+# todo: create text channel config -> point to voice channel config
 
-class PrivateChannels:
+
+class PrivateChannels(commands.Cog):
     default_channel = {
         "admin": None,  # first user to join an empty voice channel is admin, he can server mute/deafen
         "adminrole": None, #todo: not implemented
@@ -56,18 +56,6 @@ class PrivateChannels:
         self.config.register_guild(**self.default_guild)
         self.q = Queue()
 
-    @commands.command()
-    async def type(self, ctx):
-        await ctx.trigger_typing()
-        print('\n\n\n\n\n\n')
-
-    @commands.command()
-    async def debug(self, ctx):
-        await ctx.trigger_typing()
-        guild_group = self.config.guild(ctx.guild)
-        category_id = await guild_group.dynamiccategory()
-        print(category_id)
-
     @checks.is_owner()
     @commands.command()
     async def pcinit(self, ctx):
@@ -75,9 +63,8 @@ class PrivateChannels:
         await self.config.guild(ctx.guild).dynamiccategory.set(category.id)
         await ctx.guild.create_voice_channel(name=choice(self.channel_names), category=category)
 
-
-    async def on_voice_state_update(self, member:Member, before:VoiceState, after:VoiceState):
-        if not await self.config.dynamiccategory():
+    async def on_voice_state_update(self, member: Member, before: VoiceState, after: VoiceState):
+        if not await self.config.guild(member.guild).dynamiccategory():
             # do nothing, user needs to run 'pcinit' to make use of this cog
             return
 
@@ -91,15 +78,14 @@ class PrivateChannels:
     async def workqueue(self):
         # ensuring that the method is runned only one at a time
         while True:
-            #try:
-            awaitThis, channel = await self.q.get()
-            await awaitThis
-            #except:
-            #    # errors happen because of some write permission errors
-            #    # todo: put this in try except
-            #    await self.fixchannel(channel)
+            try:
+                awaitThis, channel = await self.q.get()
+                await awaitThis
+            except:
+                # todo: fix permission errors
+                await self.fixchannel(channel)
 
-    async def fixchannel(self, channel:VoiceChannel):
+    async def fixchannel(self, channel: VoiceChannel):
         #go through all voice channel from guild undere category
         #do the same with text channel
         #check roles (how??)
@@ -142,8 +128,6 @@ class PrivateChannels:
         embed.set_footer(text='NNTin cogs', icon_url='https://i.imgur.com/6LfN4cd.png')
 
         await text_channel.send(embed=embed)
-
-
 
     async def check_voice_channel(self, channel:VoiceChannel, member:Member):
         # voice channel does not exist, do nothing
