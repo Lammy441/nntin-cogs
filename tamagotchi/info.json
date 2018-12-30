@@ -1,11 +1,11 @@
 {
     "author": ["NNTin (Linley#8686)"],
     "install_msg": "Support server: https://discord.gg/YBNzz9h",
-    "name": "ICU",
+    "name": "Tamagotchi",
     "disabled": false,
-    "short": "icu",
-    "description": "Teach a valuable lesson about pinging @everyone or hand out roles for pinging certain users or roles.",
-    "tags": ["lesson", "troll", "meme"],
+    "short": "tama",
+    "description": "Everyone knows Tamagotchis. Does this need a description?",
+    "tags": ["tamagotchi", "pet", "fun"],
     "requirements": [],
     "hidden": false
 }
