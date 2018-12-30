@@ -1,0 +1,103 @@
+from discord import Member, Embed, Message
+from redbot.core import Config, checks, commands
+from redbot.core.bot import Red
+from redbot.core.commands import Context
+from .pet import Pet
+from datetime import datetime
+import random
+
+
+class Tamagotchi(commands.Cog):
+    """
+    Take good care of your Tamagotchi
+    """
+
+    default_member = {
+        "dead_tamagotchis": [],             # collection of pets that died under you
+        "tama_name": None,                  # your pet name
+        "tama_points": 0,                   # accumulated points
+        "tama_birthdate": None,             # birthday timestamp
+        "tama_timestamp": None,             # timestamp of last interaction
+        "tama_happiness": None,             # 0-1000 happiness status as of timestamp
+        "tama_health": None,                # 0-1000 health status as of timestamp
+        "tama_hunger": None,                # 0-1000 hunger status as of timestamp
+        "tama_next_random_event": None,     # a programmed forced event that will happen
+        "tama_next_event": None,            # a programmed event that will happen, can be postponed by interacting
+                                            # usually a bad thing since it means you have been neglecting it
+        "owner_id": None                    # that's you!
+    }
+    conf_id = 800858686
+
+    def __init__(self, bot: Red):
+        super().__init__()
+        self.bot = bot
+        self.config = Config.get_conf(self, self.conf_id)
+        self.config.register_member(**self.default_member)
+
+    async def _update(self, info):
+        """
+        calculating the new status of the pet, method is called when
+        interacting with your pet and after a event
+        """
+        pass
+
+    @commands.group()
+    async def tama(self, ctx):
+        """
+        Tamagotchi commands
+        """
+        pass
+
+    @tama.command()
+    async def hatch(self, ctx: Context, name):
+        """
+        Don't have a tamagotchi yet? A nearby farm found some eggs.
+
+        Syntax:
+            [p]tama hatch Linley
+        """
+        async with self.config.member(ctx.author)() as member_group:
+            embed = None
+            if not member_group["tama_name"]:
+                member_group["tama_name"] = name
+                unix_time = datetime.utcnow().timestamp()
+                member_group["tama_birthdate"] = unix_time
+                member_group["tama_timestamp"] = unix_time
+                member_group["tama_happiness"] = random.randint(900, 1000)
+                member_group["tama_health"] = random.randint(900, 1000)
+                member_group["tama_hunger"] = random.randint(900, 1000)
+                member_group["tama_next_random_event"] = unix_time + random.randint(28800, 36000)
+                member_group["owner_id"] = ctx.author.id
+
+                pet = Pet(info=member_group, seed=ctx.author.id)
+                member_group["tama_next_event"] = pet.get_next_event()
+
+                embed = Embed(color=ctx.author.color, title="It's your lucky day!".format(name),
+                              description=pet.hatch_success_1())
+                embed.add_field(name="What now?", value=pet.hatch_success_2())
+            else:
+                await self._update(member_group)
+
+                pet = Pet(info=member_group, seed=ctx.author.id)
+                embed = Embed(color=ctx.author.color, title="Try another day.",
+                              description=pet.hatch_fail())
+                member_group["tama_points"] = int(0.9 * member_group["tama_points"])
+                member_group["tama_happiness"] = int(0.8 * member_group["tama_happiness"])
+            embed.set_footer(text='NNTin cogs', icon_url='https://i.imgur.com/6LfN4cd.png')
+            await ctx.send(embed=embed)
+
+    @tama.command()
+    @checks.is_owner()
+    async def kill(self, ctx: Context):
+        """
+        Developer command only. Sorry you can't kill your pet.
+        """
+        async with self.config.member(ctx.author)() as member_group:
+            member_group.clear()
+            await ctx.tick()
+
+    @tama.command()
+    async def test(self, ctx: Context):
+        async with self.config.member(ctx.author)() as member_group:
+            print(member_group)
+            print(type(member_group))
