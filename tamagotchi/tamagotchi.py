@@ -27,11 +27,13 @@ class Tamagotchi(commands.Cog):
     Once you've given your pet enough care he will become an adult. Adult pets cannot die since they've developed
     the skill of hunting their own prey. You can still interact with them. You can also retire them by releasing
     them into the wild. If you ignore your pet he will instead abandon you.
-    Adult pets generate points at a much slower rate but they also require minimal care.
+    Once a pet reaches adulthood its points are written to your bank.
 
-    Points can be spent to unlock different pet types. Some require less attention and reach adulthood faster.
-    The general twist however is the longer a pet lives and the more attention it needs the more points you are
-    going to earn. Some guilds may allow you to unlock roles with those points.
+    You can only have one active pet at any given time.
+
+    Points in your bank can be spent to unlock different pet types. Some require less attention and reach adulthood
+    faster. The general twist however is the longer a pet takes to develop and the more attention it needs the more
+    points you are going to earn. Some guilds may allow you to unlock roles with those points.
     """
 
     default_guild = {
@@ -41,20 +43,23 @@ class Tamagotchi(commands.Cog):
         "dead_tamagotchis": [],             # collection of pets that died under you
         "retired_tamagotchis": [],          # collection of adult pets that were released into the wild
         "abandoned_tamagotchis": [],        # collection of adult pets that abandoned you
-        "tama_name": None,                  # your pet name
-        "tama_points": 0,                   # accumulated points
-        "tama_birthdate": None,             # birthday timestamp
-        "tama_timestamp": None,             # timestamp of last interaction
-        "tama_happiness": None,             # 0-1000 happiness status as of timestamp
-        "tama_health": None,                # 0-1000 health status as of timestamp
-        "tama_hunger": None,                # 0-1000 hunger status as of timestamp
-        "tama_adult_event": None,           # a programmed forced event: your pet is now an adult
-        "tama_next_random_event": None,     # a programmed forced event: good thing you can earn points
-        "tama_next_event": None,            # a programmed event that will happen, can be postponed by interacting
+        "tama": {
+            "name": None,                   # your pet name
+            "points": 0,                    # accumulated points
+            "birthdate": None,              # birthday timestamp
+            "timestamp": None,              # timestamp of last interaction
+            "happiness": None,              # 0-1000 happiness status as of timestamp
+            "health": None,                 # 0-1000 health status as of timestamp
+            "hunger": None,                 # 0-1000 hunger status as of timestamp
+            "adult_event": None,            # a programmed forced event: your pet is now an adult
+            "random_event": None,           # a programmed forced event: good thing you can earn points
+            "event": None,                  # a programmed event that will happen, can be postponed by interacting
                                             # usually a bad thing since it means you have been neglecting it
-        "tama_next_poop_event": None,       # a programmed event: Your pet poops
-        "tama_clean_poop": False,           # whether you have to clean poop
-        "owner_id": None                    # that's you!
+            "poop_event": None,             # a programmed event: Your pet poops
+            "clean_poop": None              # whether you have to clean poop
+        },
+        "owner_id": None,                   # that's you!
+        "points": 0                         # Spendable points. You get them each time a pet reaches adulthood.
     }
     conf_id = 800858686
 
@@ -73,13 +78,13 @@ class Tamagotchi(commands.Cog):
             for member_id in members_dict[guild_id].keys():
                 _dict = members_dict[guild_id][member_id]
 
-                if _dict["tama_name"] is None:
+                if _dict["tama"]["name"] is None:
                     continue
 
                 print(_dict)
                 if "tama_next_event" in _dict \
-                        and _dict["tama_next_event"] is not None \
-                        and _dict["tama_next_event"] - datetime.utcnow().timestamp() < 0:
+                        and _dict["tama"]["event"] is not None \
+                        and _dict["tama"]["event"] - datetime.utcnow().timestamp() < 0:
                     # next_event is caused when hunger or health goes below a threshold
                     guild = self.bot.get_guild(guild_id)
                     member = guild.get_member(member_id)
@@ -88,12 +93,10 @@ class Tamagotchi(commands.Cog):
     async def _status_event(self, member: Member):
         async with self.config.member(member)() as member_group:
             pet = Pet(member_group=member_group)
-            member_group["tama_next_event"] = pet.get_next_event()
+            member_group["tama"]["event"] = pet.get_next_event()
 
-            embed = Embed(color=member.color, title="Did you forget someone?",
-                          description=pet.hunger_health_event())
-            embed.add_field(name="Hunger", value=pet.hunger_event())
-            embed.add_field(name="Health", value=pet.health_event())
+            embed = Embed(color=member.color)
+            embed.populate_fields(pet.hunger_health_event())
             embed.set_footer(text='NNTin cogs', icon_url='https://i.imgur.com/6LfN4cd.png')
 
             async with self.config.guild(member.guild)() as guild_group:
@@ -123,7 +126,7 @@ class Tamagotchi(commands.Cog):
         doing anything health/hunger related with your pet and after a event
         """
         pet = Pet(member_group=member_group)
-        member_group["tama_next_event"] = pet.get_next_event()
+        member_group["tama"]["event"] = pet.get_next_event()
 
     @commands.group()
     async def tama(self, ctx):
@@ -142,20 +145,20 @@ class Tamagotchi(commands.Cog):
         """
         async with self.config.member(ctx.author)() as member_group:
             embed = None
-            if not member_group["tama_name"]:
-                member_group["tama_name"] = name
+            if not member_group["tama"]:
+                member_group["tama"]["name"] = name
                 unix_time = datetime.utcnow().timestamp()
-                member_group["tama_birthdate"] = unix_time
-                member_group["tama_timestamp"] = unix_time
-                member_group["tama_happiness"] = random.randint(900, 1000)
-                member_group["tama_health"] = random.randint(900, 1000)
-                member_group["tama_hunger"] = random.randint(900, 1000)
+                member_group["tama"]["birthdate"] = unix_time
+                member_group["tama"]["timestamp"] = unix_time
+                member_group["tama"]["happiness"] = random.randint(900, 1000)
+                member_group["tama"]["health"] = random.randint(900, 1000)
+                member_group["tama"]["hunger"] = random.randint(900, 1000)
                 member_group["owner_id"] = ctx.author.id
 
                 pet = Pet(member_group=member_group)
-                member_group["tama_next_event"] = pet.get_next_event()
-                member_group["tama_next_poop_event"] = pet.get_next_poop_event()
-                # member_group["tama_next_random_event"] = pet.get_next_random_event()
+                member_group["tama"]["event"] = pet.get_next_event()
+                member_group["tama"]["poop_event"] = pet.get_next_poop_event()
+                # member_group["tama"]["random_event"] = pet.get_next_random_event()
 
                 embed = Embed(color=ctx.author.color)
 
@@ -167,8 +170,6 @@ class Tamagotchi(commands.Cog):
                 pet = Pet(member_group=member_group)
                 embed = Embed(color=ctx.author.color)
                 embed.populate_fields(pet.hatch_fail())
-                member_group["tama_points"] = 0.9 * member_group["tama_points"]
-                member_group["tama_happiness"] = 0.8 * member_group["tama_happiness"]
             embed.set_footer(text='NNTin cogs', icon_url='https://i.imgur.com/6LfN4cd.png')
             await ctx.send(embed=embed)
 
