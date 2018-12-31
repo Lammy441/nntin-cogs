@@ -1,108 +1,184 @@
 import random
-from string import Formatter
 from datetime import datetime
+try:
+    from .helper import ExtendedFormatter
+except ModuleNotFoundError:
+    from helper import ExtendedFormatter
 
-
-class ExtendedFormatter(Formatter):
-    """An extended format string formatter
-
-    Formatter with extended conversion symbol"""
-    def convert_field(self, value, conversion):
-        # do any conversion on the resulting object
-        if conversion == 'u':
-            return value.upper()
-        elif conversion == 'l':
-            return value.lower()
-        elif conversion == 'c':
-            return value.capitalize()
-        else:
-            return super(ExtendedFormatter, self).convert_field(value, conversion)
+# todo: in the far future:
+# todo: implement different pet types. You can earn more points with pets that
+# todo: grow slower, eat more, poop more. In general requires more attention
+# todo: and more time commitment.
+# todo: points can be used to unlock pet types. Some guilds may use the points to unlock roles.
 
 
 class Pet:
     """The actual tamagotchi pet instance."""
-    def __init__(self, info):
-        # for now determines the gender of your pet
-        self.seed = info["owner_id"] + len(info["dead_tamagotchis"])
-        random.seed(self.seed)
 
-        self.name = info["tama_name"]
-        self.points = info["tama_points"]
-        self.birthdate = info["tama_birthdate"]
-        self.timestamp = info["tama_timestamp"]
-        self.happiness = info["tama_happiness"]
-        self.health = info["tama_health"]
-        self.hunger = info["tama_hunger"]
-        self.next_random_event = info["tama_next_random_event"]
-        self.next_event = info["tama_next_event"]
-        self.next_poop = info["tama_next_poop"]
-        self.clean_poop = info["tama_clean_poop"]
-        self.owner_id = str(info["owner_id"])
+    def __init__(self, member_group):
+        self.d = member_group
 
-        gen = random.randint(0, 2)
-        if gen == 0:
-            self.s = "he"
-            self.o = "him"
-            self.a = "his"
-            self.p = "his"
-        elif gen == 1:
-            self.s = "she"
-            self.o = "her"
-            self.a = "her"
-            self.p = "hers"
-        elif gen == 2:
-            self.s = "it"
-            self.o = "it"
-            self.a = "its"
-            self.p = "its"
+        """
+        1000 hunger lasts 48 hours. 1 hunger = 172.8 seconds
+        1000 health lasts 16 hours. 1 health =  57.6 seconds
 
-    def get_next_event(self):
+        However health only ticks down when there is poop.
+
+        You can get a maximum of 1000 points per hour. 5 point is the maximum you can achieve per tick.
+        1 point tick = 18.0 seconds
+
+        These are not actual ticks. Time progresses when you interact with the bot. And those time
+        progression only applies to your Tamagotchi. It's more correct to say that these are your
+        conversion factors. I named them tick since it's easier for me to imagine.
+        """
+        self.HUNGER_TICK = 172.8
+        self.HEALTH_TICK = 57.6
+        self.POINT_TICK = 18.0
+        self.POOP_TICK = random.randint(28800, 36000)
+        self.ADULT_WHEN = 12096000
+
+        self.adult = True if datetime.utcnow().timestamp() - self.d["tama_birthdate"] > self.ADULT_WHEN else False
+        self.f = ExtendedFormatter()
+
+        # seed determines the gender of your pet, extend it in future
+        self.seed = member_group["owner_id"] + len(member_group["dead_tamagotchis"]) + len(
+            member_group["retired_tamagotchis"]) + len(member_group["abandoned_tamagotchis"])
+        random.seed(self.seed + 2)
+
+        self.gender = random.randint(0, 2)
+
+    def get_next_event(self) -> float:
         """
         Calculate the next event based on health and hunger.
         Hunger events are fired at: 500, 300, 100, 0
         Health events are fired at: 800, 500, 300, 0
-
-        1000 hunger lasts 48 hours. 1 hunger = 172.8 seconds
-        1000 health lasts 24 hours. 1 health =  86.4 seconds
-
-        Health only ticks down when there is poop.
         """
-        hunger_event = self.hunger - (500 if self.hunger > 500 else
-                                      (300 if self.hunger > 300 else
-                                       (100 if self.hunger > 100 else 0)))
-        health_event = self.health - (800 if self.health > 800 else
-                                      (500 if self.health > 500 else
-                                       (300 if self.health > 300 else 0)))
-        hunger_event *= 172.8      # todo: commented for testing reasons
-        if self.clean_poop:
-            health_event *= 86.4
+        hunger = self.d["tama_hunger"]
+        health = self.d["tama_health"]
+        hunger_event = hunger - (500 if hunger > 500 else
+                                 (300 if hunger > 300 else
+                                  (100 if hunger > 100 else 0)))
+        health_event = health - (800 if health > 800 else
+                                 (500 if health > 500 else
+                                  (300 if health > 300 else 0)))
+        hunger_event *= self.HUNGER_TICK
+        if self.d["tama_clean_poop"]:
+            health_event *= self.HEALTH_TICK
         else:
             health_event = 172800
-        return self.timestamp + min(hunger_event, health_event)
+        return self.d["tama_timestamp"] + min(hunger_event, health_event)
+
+    def get_next_poop_event(self) -> float:
+        return datetime.utcnow().timestamp() + self.POOP_TICK
+
+    def get_next_random_event(self) -> float:
+        raise NotImplementedError("get_next_random_event() is not implemented.")
+
+    if True:
+        """
+        The pet stats is calculated based on the past timestamp, current timestamp and past stats
+        """
+        def get_update(self) -> dict:
+
+            return self.d
+
+        def get_health(self) -> float:
+            if not self.d["tama_clean_poop"]:     # full health when litter box is cleaned
+                return 1000
+            else:
+                past_seconds = datetime.utcnow().timestamp() \
+                               - datetime.utcfromtimestamp(self.d["tama_timestamp"]).timestamp()
+                past_health_ticks = past_seconds / self.HEALTH_TICK
+                assert self.d["tama_health"] - past_health_ticks <= 1000, "Health > 1000. This shouldn't be possible."
+                return self.d["tama_health"] - past_health_ticks
+
+        def get_hunger(self) -> float:
+            past_seconds = datetime.utcnow().timestamp() \
+                           - datetime.utcfromtimestamp(self.d["tama_timestamp"]).timestamp()
+            past_hunger_ticks = past_seconds / self.HUNGER_TICK
+            assert self.d["tama_hunger"] - past_hunger_ticks <= 1000, "Hunger > 1000. This shouldn't be possible."
+            return self.d["tama_hunger"] - past_hunger_ticks
+
+        def get_happiness(self) -> float:
+            average_health = (self.d["tama_health"] + self.get_health()) / 2
+            average_hunger = (self.d["tama_hunger"] + self.get_hunger()) / 2
+            happiness = (average_health + average_hunger) / 2
+            assert happiness <= 1000, "Happiness > 100. This shouldn't be possible."
+            return happiness
+
+        def get_points(self) -> float:
+            happiness = self.d["tama_happiness"]
+            point_mult = (5.0 if happiness > 900 else
+                          (4.5 if happiness > 800 else
+                           (4.0 if happiness > 700 else
+                            (3.0 if happiness > 600 else
+                             (1.0 if happiness > 500 else 0.1)))))
+            if self.adult:
+                point_mult /= 5
+
+            past_seconds = datetime.utcnow().timestamp() - datetime.utcfromtimestamp(
+                self.d["tama_timestamp"]).timestamp()
+            past_point_ticks = past_seconds / self.POINT_TICK
+            return self.d["tama_points"] + (past_point_ticks * point_mult)
 
     if True:
         """
         Anything string related goes here.
         """
-        def cformat(self, template_str):
-            f = ExtendedFormatter()
-            output = f.format(template_str, s=self.s, o=self.o, a=self.a, p=self.p, name=self.name)
-            return output
+        def cformat(self, _template):
+            if self.gender == 0:
+                s = "he"
+                o = "him"
+                a = "his"
+                p = "his"
+            elif self.gender == 1:
+                s = "she"
+                o = "her"
+                a = "her"
+                p = "hers"
+            else:
+                s = "it"
+                o = "it"
+                a = "its"
+                p = "its"
+            if isinstance(_template, str):
+                return self.f.format(_template, s=s, o=o, a=a, p=p, name=self.d["tama_name"])
+            elif isinstance(_template, list):
+                return [self.cformat(element) for element in _template]
+            elif isinstance(_template, dict):
+                return {key: self.cformat(value) for key, value in _template.items()}
+            else:
+                raise NotImplementedError
 
         def hatch_fail(self):
-            t = "The farm is out of eggs. {name!c} looks at you with watery eyes. You have " \
-                "a feeling {s}'s disappointed. Is {s} not good enough?"
-            return self.cformat(t)
+            if self.adult:
+                res = {
+                    "name": "Try another day.",
+                    "value": "It was already hard taking care of {name!c}. It would be irresponsible to get "
+                             "another pet. However {name!c} has grown up a lot and knows how to survive on {a} "
+                             "own. You can release {o} into the wild. Don't worry. {s!c} won't be gone."
+                }
+            else:
+                res = {
+                    "name": "Try another day.",
+                    "value": "The farm is out of eggs. {name!c} looks at you with watery eyes. You have "
+                             "a feeling {s}'s disappointed. Is {s} not good enough?"
+                }
+            return self.cformat(res)
 
-        def hatch_success_1(self):
-            t = "A tamagotchi just hatched from its egg. {s!c} looks around and starts " \
-                "following you. Oh no... {s!c} thinks you are {a} mother."
-            return self.cformat(t)
-
-        def hatch_success_2(self):
-            t = "You can take care of {o} or abandon {o}. Either way {s} will follow you around.\n" \
-                "Write `[p]tama` to see what else you can do. You decide to name {o} **{name!u}**."
-            return self.cformat(t)
+        def hatch_success(self):
+            res = list()
+            res.append({
+                "name": "It's your lucky day!",
+                "value": "A tamagotchi just hatched from {a} egg. {s!c} looks around and starts "
+                         "following you. Oh no... {s!c} thinks you are {a} mother."
+            })
+            res.append({
+                "name": "What now?",
+                "value": "You can take care of {o} or abandon {o}. Either way {s} will follow you around.\n"
+                         "Write `[p]tama` to see what else you can do. You decide to name {o} **{name!u}**."
+            })
+            return self.cformat(res)
 
         def hunger_health_event(self):
             t = "It's been some time since you looked after {name!c}."
@@ -110,40 +186,57 @@ class Pet:
 
         def hunger_event(self):
             # 500 300 100 0
-            t = None
-            if self.health > 400:
+            hunger = self.get_hunger()
+            if hunger > 800:
+                t = "{name!c} is not hungry."
+            elif hunger > 400:
                 t = "Your tamagotchi {name!c} seems to be hungry. Maybe you should feed {o}."
-            elif self.health > 200:
+            elif hunger > 200:
                 t = "You should feed {name!c}. {s}'s been starving for quite some time."
-            elif self.health > 50:
+            elif hunger > 50:
                 t = "{name!c} is about to starve to death."
             else:
                 t = "{name!c} starved to death."
             return self.cformat(t)
 
         def health_event(self):
-            # todo: write a bunch of different texts
             # 800 500 300 0
-            t = "Your pet {name!c} is in top health (cleanliness)."
+            health = self.get_health()
+            if health == 1000:
+                t = "The litter box is clean."
+            elif health > 650:
+                t = "What is this smell..."
+            elif health > 400:
+                t = "That turd pooped again. Maybe I should clean {a} litter box."
+            elif health > 150:
+                t = "Flies are flying around the litter box. You call out {name!c}'s name but {s}'s not responding. " \
+                    "You finally find {o} hiding under your bed."
+            else:
+                t = "{name!c} wanders off. {s!c} has no interest living in a filthy home. Maybe {s} " \
+                    "will come back when you clean {a} litter box."
             return self.cformat(t)
 
 
 if __name__ == '__main__':
     info = {
         "dead_tamagotchis": [],
-        "tama_name": "fhdksj",
+        "retired_tamagotchis": [],
+        "abandoned_tamagotchis": [],
+        "tama_name": "Linley",
         "tama_points": 0,
-        "tama_birthdate": 1546177882.234719,
-        "tama_timestamp": 1546177882.234719,
-        "tama_happiness": 1000,
-        "tama_health": 923,
-        "tama_hunger": 951,
-        "tama_next_random_event": 1546206861.234719,
-        "tama_next_event": 1546213286.234719,
-        "tama_next_poop": 1546213286.234719,
+        "tama_birthdate": 1546261772.663174,
+        "tama_timestamp": 1546261772.663174,
+        "tama_happiness": 973,
+        "tama_health": 933,
+        "tama_hunger": 964,
+        "tama_next_random_event": None,
+        "tama_next_event": None,
+        "tama_next_poop_event": None,
         "tama_clean_poop": False,
-        "owner_id": 4564654
+        "owner_id": 77488778255540224
     }
-    p = Pet(info=info)
+    pet = Pet(member_group=info)
 
-    print(p.hunger_health_event())
+    print(pet.hatch_success())
+
+
