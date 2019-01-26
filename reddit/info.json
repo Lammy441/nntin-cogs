@@ -1,0 +1,11 @@
+{
+    "author": ["NNTin (Linley#8686)"],
+    "install_msg": "Support server: https://discord.gg/YBNzz9h",
+    "name": "Reddit",
+    "disabled": false,
+    "short": "reddit",
+    "description": "Display the front page (of a subreddit) in a text channel.",
+    "tags": ["utility", "reddit"],
+    "requirements": [],
+    "hidden": false
+}
