@@ -1,11 +1,14 @@
 import praw
-from datetime import datetime
+import datetime
+import json
+import random
 
 
 class Reddit:
     submission_keys = [
-        "subreddit", "selftext", "gilded", "title", "domain", "link_flair_text", "score", "thumbnail", "edited",
-        "created", "created_utc", "is_self", "pinned", "stickied", "distinguished", "spoiler", "permalink", "author"
+        "subreddit", "selftext", "url", "gilded", "title", "domain", "link_flair_text", "score", "thumbnail", "edited",
+        "created", "created_utc", "is_self", "pinned", "stickied", "distinguished", "spoiler", "permalink", "author",
+        "over_18", "spoiler"
     ]  # created_ago, edited_ago
 
     subreddit_keys = [
@@ -16,7 +19,7 @@ class Reddit:
     def __init__(self, **kwargs):
         self.r = praw.Reddit(**kwargs)
 
-    def get_hot_submissions(self, subreddit, show_stickied=False, show_spoiler=False, show_pinned=False, amount=10):
+    def get_hot_submissions(self, subreddit, show_stickied=True, show_spoiler=True, show_pinned=True, amount=10):
         submissions = self.r.subreddit(subreddit).hot()
         counter = 0
         for submission in submissions:
@@ -29,32 +32,27 @@ class Reddit:
             if counter > amount:
                 break
 
-            current = datetime.utcnow().timestamp()
+            current = datetime.datetime.utcnow().timestamp()
             res = {k: v for k, v in submission.__dict__.items() if k in self.submission_keys}
-            res["created_ago"] = current - res["created_utc"]
-            if res["edited"]:
-                res["edited_ago"] = current - res["edited"] - res["created"] + res["created_utc"]
-            else:
-                res["edited_ago"] = res["edited"]
 
+            res["created_ago"] = "{:0>8}".format(str(datetime.timedelta(seconds=int(current - res["created_utc"]))))
+
+            if res["edited"]:
+                res["edited_utc"] = res["edited"] + res["created_utc"] - res["created"]
+                res["edited_ago"] = "{:0>8}".format(str(datetime.timedelta(seconds=int(current - res["edited_utc"]))))
+            else:
+                res["edited_ago"] = False
+                res["edited_utc"] = False
             yield res
 
     def get_info(self, subreddit):
         sub = self.r.subreddit(subreddit)
-        return {k: getattr(sub, k) for k in self.subreddit_keys}
+        res = {k: getattr(sub, k) for k in self.subreddit_keys}
 
-
-if __name__ == '__main__':
-    reddit_creds = {
-        "client_id": "x",
-        "client_secret": "x",
-        "username": "x",
-        "password": "x",
-        "user_agent": "x"
-    }
-
-    r = Reddit(**reddit_creds)
-    for hot_submission in r.get_hot_submissions("dota2"):
-        print(hot_submission)
-
-    print(r.get_info("dota2"))
+        for k, v in res.items():
+            if "_color" in k:
+                try:
+                    res[k] = int(v[1:], 16)
+                except ValueError:
+                    res[k] = random.randint(0, 16777215)
+        return res

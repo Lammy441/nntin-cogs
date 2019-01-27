@@ -1,13 +1,10 @@
-from discord import Member, Role, Status, Embed, Message
 from redbot.core import Config, commands
-from redbot.core import checks
 from redbot.core.bot import Red
-from redbot.core.utils.chat_formatting import pagify
 from redbot.core.commands import Context
 from datetime import datetime
-
-
-# todo: convert color from "#00ff00" to int.
+from .api import Reddit as RedditLogin
+from .helper import Embed
+import asyncio
 
 
 class Reddit(commands.Cog):
@@ -16,19 +13,19 @@ class Reddit(commands.Cog):
     """
 
     default_global = {
-        "refresh_rate": 7,  # in seconds, gets the data off reddit every x seconds and updates the message
+        "refresh_rate": 5,  # in seconds, gets the data off reddit every x seconds and updates the message
         "future": 0,        # time in future
         "reddit": {         # required for Reddit API authentication
-            "client_id": None,
-            "client_secret": None,
-            "username": None,
-            "password": None,
-            "user_agent": None
+            "client_id": "",
+            "client_secret": "",
+            "username": "",
+            "password": "",
+            "user_agent": "discord front page visualizer v0.0.1"
         }
     }
 
     default_channel = {
-        "is_active": False,               # before becoming active
+        "is_active": False,
         "message": {
             "id": None,                   # discord message ID that is being repeatedly edited
             "subreddit": None,            # the subreddit that is being displayed, + separate multiple
@@ -40,34 +37,31 @@ class Reddit(commands.Cog):
             "display_timestamp": True,    # whether the bot should update the timestamp (bot is alive indicator)
         },
         "embed": {
-            'author': {
-                'name': '{display_name_prefixed} front page',
-                'url': 'https://old.reddit.com/{display_name_prefixed}',
-                'icon_url': '{header_img}'
+            "author": {
+                "name": "{display_name_prefixed} front page",
+                "url": "https://old.reddit.com/{display_name_prefixed}",
+                "icon_url": "{header_img}"
             },
-            'title': '',
-            'description': '{subscribers} Dota Auto Chess Players\n'
-                           '{accounts_active} days until Mars',
-            'color': '{key_color}',       # careful, this has to be int!
-            'timestamp': None,
-            'type': 'rich',
-            'url': '',
-            'fields': [{
-                'inline': False,
-                'name': '[{score}] {author_name} submitted {ago} ({timestamp})',
-                'value': '[{title}]({permalink})\n'
-                         '{text}'
-            }],
-            'image': {
-                'url': '{header_img}'
+            "title": "",
+            "description": "{subscribers} Dota Auto Chess Players\n{accounts_active} days until Mars",
+            "color": "{key_color}",
+            "url": "",
+            "fields": [],
+            "image": {
+                "url": "{banner_img}"
             },
-            'thumbnail': {
-                'url': '{banner_img}'
+            "thumbnail": {
+                "url": "{header_img}"
             },
-            'footer': {
-                'text': 'last refresh time',
-                'icon_url': '{header_img}'
+            "footer": {
+                "text": "last refresh time",
+                "icon_url": "{header_img}"
             }
+        },
+        "field": {
+            "inline": False,
+            "name": "<:upvote:539091866797342720>{score} /u/{author} {gilded!g}",
+            "value": "[{title}]({url})\n*{created_ago} ago* {spoiler!x} {over_18!n}"
         }
     }
     conf_id = 800858686
@@ -75,46 +69,60 @@ class Reddit(commands.Cog):
     def __init__(self, bot: Red):
         super().__init__()
         self.bot = bot
+        self.running = True
         self.config = Config.get_conf(self, self.conf_id)
         self.config.register_channel(**self.default_channel)
         self.config.register_global(**self.default_global)
+        self.r = None
+        self.bot.loop.create_task(self._login())
 
-        self.format_global = {
-            "subscribers": 9000,
-            "accounts_active": 1337,
-            "display_name_prefixed": "r/dota2",
-            "banner_img": "https://b.thumbs.redditmedia.com/z2pliN1DfDEamcmJaDYbxvzJV8hUG1MhwQa03ejtpUk.png",
-            "banner_background_image": "https://styles.redditmedia.com/t5_2s580/styles/bannerBackgroundImage_8z5pscm0f5l11.png",
-            "header_img": "https://b.thumbs.redditmedia.com/F82n9T2HtoYxNmxbe1CL0RKxBdeUEw-HVyd-F-Lb91o.png",
-            "icon_img": "https://a.thumbs.redditmedia.com/0bQOxAs6XMJhixOFLmta78SXPXaDxzp8jw915k7NLI4.png",
-            "primary_color": "#349e48",
-            "banner_background_color": "#251916",
-            "key_color": "#ea0027"
-        }
-        self.format_submission = {
-            "subreddit": "DotA2",
-            "selftext": "Riftshadow Ruins Resident",
-            "gilded": 3,
-            "title": "RRR",
-            "domain": "self.DotA2",
-            "link_flair_text": "Fluff",
-            "score": 9000,
-            "thumbnail": "https://i.imgur.com/11zvdoc.png",
-            "edited": "1548399888",
-            "created": "154839465",
-            "created_utc": "516161",
-            "is_self": True,
-            "pinned": False,
-            "distinguished": False,
-            "spoiler": False,
-            "stickied": False,
-            "permalink": "/r/DotA2",
-            "author": "Meepo",
-            "created_ago": "5 hours and 10 minutes",    # this has to be manually created
-            "edited_ago":  "6 minutes"                  # this has to be manually created
-        }
+    def __unload(self):
+        self.running = False
 
+    async def _login(self):
+        async with self.config.reddit() as reddit_creds:
+            self.r = RedditLogin(**reddit_creds)
 
+        self.bot.loop.create_task(self._check())
+
+    async def _check(self):
+        while self.running:
+            await self._check_future()
+            await asyncio.sleep(1)
+
+    async def _check_future(self):
+        future = await self.config.future()
+        now = datetime.utcnow().timestamp()
+        if future < now:
+            await self.config.future.set(now + await self.config.refresh_rate())
+            await self._update()
+
+    async def _update(self):
+        channel_configs = (await self.config.all_channels())
+
+        for channel_id in channel_configs.keys():
+            channel_group = channel_configs[channel_id]
+
+            if not channel_group["is_active"]:
+                print("skipping")
+                continue
+            channel = self.bot.get_channel(channel_id)
+            message = await channel.get_message(channel_group["message"]["id"])
+
+            embed = Embed.create_embed(
+                _data=channel_group["embed"],
+                **self.r.get_info(channel_group["message"]["subreddit"])
+            )
+            for submission in self.r.get_hot_submissions(
+                    subreddit=channel_group["message"]["subreddit"],
+                    amount=channel_group["message"]["amount"]):
+                embed.add_field(
+                    **channel_group["field"],
+                    **submission
+                )
+            embed = Embed.from_data(embed.to_dict())
+            embed.timestamp = datetime.utcnow()
+            await message.edit(embed=embed, content="")
 
     @commands.group()
     async def reddit(self, ctx):
@@ -124,8 +132,12 @@ class Reddit(commands.Cog):
         pass
 
     @reddit.command()
-    async def set(self, ctx):
+    async def set(self, ctx: Context, message_id: int, subreddit: str):
         """
+        configure your shit
         """
         async with self.config.channel(ctx.channel)() as channel_group:
+            channel_group["message"]["id"] = message_id
+            channel_group["message"]["subreddit"] = subreddit
+            channel_group["is_active"] = True
             pass
